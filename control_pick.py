@@ -102,7 +102,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # --- CONSTANTS ---
-FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "C1", "C2", "C3"]
+# Đã bổ sung BC, SPC, CA, CB vào danh sách FLOW_ZONES
+FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "BC", "SPC", "C1", "C2", "C3", "CA", "CB"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
@@ -271,7 +272,7 @@ class FetchTasksThread(QThread):
 
         try:
             while True:
-                # Đã cập nhật Payload theo yêu cầu: Thêm paperless và is_add_picking
+                # Cập nhật Payload: Thêm paperless và is_add_picking
                 payload = {
                     "start_time": start_ts,
                     "end_time": end_ts,
@@ -287,8 +288,7 @@ class FetchTasksThread(QThread):
                 res = requests.post(url, json=payload, headers=headers, timeout=10)
 
                 if pageno == 1:
-                    print(
-                        f"[DEBUG][WMS Tasks] API Response (Mẫu Page 1): {res.text[:500]}...")  # In ra 500 kí tự đầu tiên
+                    print(f"[DEBUG][WMS Tasks] API Response (Mẫu Page 1): {res.text[:500]}...")
 
                 if res.status_code != 200:
                     print(f"[DEBUG][WMS Tasks] Lỗi HTTP: {res.status_code}")
@@ -305,7 +305,6 @@ class FetchTasksThread(QThread):
                     break
                 pageno += 1
 
-            # Print chi tiết ra màn hình đen để Check lỗi Task rỗng
             print(f"[DEBUG][WMS Tasks] TỔNG SỐ TASK THỰC TẾ TRẢ VỀ: {len(all_tasks)}")
             if all_tasks:
                 print(f"[DEBUG][WMS Tasks] Dữ liệu mẫu 1 Task đầu tiên: {json.dumps(all_tasks[0], ensure_ascii=False)}")
@@ -804,16 +803,28 @@ class MainWindow(QMainWindow):
         lbl_flow = QLabel("Khu vực: FLOW PICK")
         lbl_flow.setStyleSheet("font-weight: bold; font-size: 15px; color: #e17055;")
         flow_layout_main.addWidget(lbl_flow)
+
+        # --- CẬP NHẬT CẤU TRÚC LƯỚI CHO FLOW PICK ---
         flow_grid = QGridLayout()
+        # Row 0: Nhóm A
         self.create_zone_box(flow_grid, "A1", "#00cec9", 0, 0, True, True)
         self.create_zone_box(flow_grid, "A2", "#00cec9", 0, 1, True, True)
         self.create_zone_box(flow_grid, "A3", "#00cec9", 0, 2, True, True)
-        self.create_zone_box(flow_grid, "A4", "#00cec9", 0, 3, True, True)
-        self.create_zone_box(flow_grid, "B1", "#e17055", 1, 0, True, True, colspan=2)
-        self.create_zone_box(flow_grid, "B2", "#e17055", 1, 2, True, True, colspan=2)
+        self.create_zone_box(flow_grid, "A4", "#00cec9", 0, 3, True, True, colspan=2)
+
+        # Row 1: Nhóm B (Thêm BC, SPC)
+        self.create_zone_box(flow_grid, "B1", "#e17055", 1, 0, True, True)
+        self.create_zone_box(flow_grid, "B2", "#e17055", 1, 1, True, True)
+        self.create_zone_box(flow_grid, "BC", "#e17055", 1, 2, True, True)
+        self.create_zone_box(flow_grid, "SPC", "#e17055", 1, 3, True, True, colspan=2)
+
+        # Row 2: Nhóm C (Thêm CA, CB)
         self.create_zone_box(flow_grid, "C1", "#6c5ce7", 2, 0, True, True)
-        self.create_zone_box(flow_grid, "C2", "#6c5ce7", 2, 1, True, True, colspan=2)
-        self.create_zone_box(flow_grid, "C3", "#6c5ce7", 2, 3, True, True)
+        self.create_zone_box(flow_grid, "C2", "#6c5ce7", 2, 1, True, True)
+        self.create_zone_box(flow_grid, "C3", "#6c5ce7", 2, 2, True, True)
+        self.create_zone_box(flow_grid, "CA", "#6c5ce7", 2, 3, True, True)
+        self.create_zone_box(flow_grid, "CB", "#6c5ce7", 2, 4, True, True)
+
         flow_layout_main.addLayout(flow_grid)
         right_layout.addWidget(flow_container, stretch=1)
 
