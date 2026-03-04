@@ -9,12 +9,14 @@ import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QProgressBar, QTextEdit,
                              QPushButton, QListWidget, QAbstractItemView,
-                             QListWidgetItem, QMessageBox, QGridLayout, QFrame, QMenu, QLineEdit, QSizePolicy)
+                             QListWidgetItem, QMessageBox, QGridLayout, QFrame, QMenu, QLineEdit, QSizePolicy,
+                             QStackedWidget)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QRunnable, QThreadPool, pyqtSlot
 from PyQt5.QtGui import QFont, QColor
 
 import gspread
 from google.oauth2.service_account import Credentials
+
 
 # --- HÀM TÍNH TỶ LỆ MÀN HÌNH (SCALE FACTOR) ---
 def get_scale_factor():
@@ -24,15 +26,15 @@ def get_scale_factor():
     # Lấy tỷ lệ nhỏ hơn để đảm bảo không bị tràn
     return min(scale_w, scale_h, 1.0)
 
+
 # --- GIAO DIỆN TRUNG TÍNH ĐỘNG DỰA TRÊN TỶ LỆ (ULTRA-COMPACT) ---
 def get_dynamic_qss(scale):
     # CHỮ NHỎ LẠI: Ép font chữ xuống kích thước siêu tiết kiệm không gian
-    f_list = max(9, int(11 * scale))      # Font list hiển thị tên siêu nhỏ
-    f_btn = max(9, int(11 * scale))       # Font nút bấm
-    f_input = max(10, int(12 * scale))    # Font ô nhập liệu
-    
+    f_list = max(9, int(11 * scale))  # Font list hiển thị tên siêu nhỏ
+    f_btn = max(9, int(11 * scale))  # Font nút bấm
+    f_input = max(10, int(12 * scale))  # Font ô nhập liệu
+
     # Ép padding tối thiểu để tiết kiệm không gian
-    pad_0 = 0
     pad_xs = max(1, int(2 * scale))
     pad_small = max(2, int(4 * scale))
     pad_med = max(4, int(6 * scale))
@@ -94,6 +96,26 @@ def get_dynamic_qss(scale):
     QPushButton:pressed {{
         background-color: #0097e6;
     }}
+
+    /* STYLE CHO TABS CHUYỂN ĐỔI */
+    QPushButton#tab_active {{
+        background-color: #0984e3;
+        color: white;
+        border-bottom-left-radius: 0px;
+        border-bottom-right-radius: 0px;
+        font-size: {max(10, int(13 * scale))}px;
+    }}
+    QPushButton#tab_inactive {{
+        background-color: #cbd5e1;
+        color: #2d3436;
+        border-bottom-left-radius: 0px;
+        border-bottom-right-radius: 0px;
+        font-size: {max(9, int(12 * scale))}px;
+    }}
+    QPushButton#tab_inactive:hover {{
+        background-color: #b2bec3;
+    }}
+
     QPushButton#btn_delete {{
         background-color: #d63031;
     }}
@@ -121,6 +143,7 @@ def get_dynamic_qss(scale):
     }}
     """
 
+
 # --- CONSTANTS ---
 FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "BC", "SPC", "C1", "C2", "C3", "CA", "CB"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
@@ -136,6 +159,7 @@ def log_uncaught_exceptions(ex_cls, ex, tb):
     print("[CRITICAL ERROR] Hệ thống gặp lỗi nghiêm trọng:")
     print(text)
     QMessageBox.critical(None, 'Lỗi Hệ Thống', f"Ứng dụng gặp lỗi:\n{text}")
+
 
 sys.excepthook = log_uncaught_exceptions
 
@@ -627,7 +651,7 @@ class ZoneListWidget(QListWidget):
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDefaultDropAction(Qt.MoveAction)
         # Cho phép Widget nén hết cỡ nếu không có không gian
-        self.setMinimumHeight(0) 
+        self.setMinimumHeight(0)
 
     def dropEvent(self, event):
         source = event.source()
@@ -670,12 +694,12 @@ class MainWindow(QMainWindow):
         self.scale = get_scale_factor()
         self.setWindowTitle("Hệ Thống Quản Lý Zone Picker")
         self.setStyleSheet(get_dynamic_qss(self.scale))
-        
+
         self.active_threads = []
         self.cached_data = []
         self.wfm_cookie = self.wms_cookie = ""
         self.current_firebase_data = {}
-        self.task_counts = {}  
+        self.task_counts = {}
 
         self.badges = {}
 
@@ -703,7 +727,7 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        
+
         # GIẢM LỀ TỐI ĐA (Margins siêu nhỏ để nhường không gian cho nội dung chính)
         pad_main = max(2, int(4 * self.scale))
         main_layout.setContentsMargins(pad_main, pad_main, pad_main, pad_main)
@@ -719,32 +743,35 @@ class MainWindow(QMainWindow):
         scan_frame = QFrame()
         scan_frame.setStyleSheet("QFrame { background-color: white; border: 2px solid #cbd5e1; border-radius: 4px; }")
         scan_box_layout = QHBoxLayout(scan_frame)
-        scan_box_layout.setContentsMargins(int(4*self.scale), int(4*self.scale), int(4*self.scale), int(4*self.scale))
-        
+        scan_box_layout.setContentsMargins(int(4 * self.scale), int(4 * self.scale), int(4 * self.scale),
+                                           int(4 * self.scale))
+
         # Cột trái Header (Nhập liệu và Trạng thái)
         input_vbox = QVBoxLayout()
         input_vbox.setSpacing(int(2 * self.scale))
-        
+
         lbl_scan_title = QLabel("Cổng Nhập Dữ Liệu (Quét/Paste ID)")
-        lbl_scan_title.setStyleSheet(f"font-weight: bold; font-size: {max(9, int(12*self.scale))}px; color: #636e72; border: none;")
+        lbl_scan_title.setStyleSheet(
+            f"font-weight: bold; font-size: {max(9, int(12 * self.scale))}px; color: #636e72; border: none;")
         input_vbox.addWidget(lbl_scan_title)
-        
+
         self.txt_scan = ScanTextEdit()
         self.txt_scan.setPlaceholderText("Paste ID và Enter...")
         # ÉP TEXT BOX CHỈ CÒN ĐỦ CHIỀU CAO CHO 1-2 DÒNG
-        self.txt_scan.setMaximumHeight(int(32 * self.scale)) 
+        self.txt_scan.setMaximumHeight(int(32 * self.scale))
         self.txt_scan.enter_pressed.connect(self.on_scan_triggered)
         input_vbox.addWidget(self.txt_scan)
 
         status_layout = QHBoxLayout()
         self.lbl_status = QLabel("Đang khởi động hệ thống...")
-        self.lbl_status.setStyleSheet(f"font-weight: bold; color: #2d3436; border: none; font-size: {max(9, int(11*self.scale))}px;")
+        self.lbl_status.setStyleSheet(
+            f"font-weight: bold; color: #2d3436; border: none; font-size: {max(9, int(11 * self.scale))}px;")
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)
         status_layout.addWidget(self.lbl_status, stretch=8)
         status_layout.addWidget(self.progress_bar, stretch=2)
         input_vbox.addLayout(status_layout)
-        
+
         scan_box_layout.addLayout(input_vbox, stretch=8)
 
         # Cột phải Header (Nút chức năng)
@@ -758,7 +785,7 @@ class MainWindow(QMainWindow):
         btn_vbox.addWidget(btn_refresh)
         btn_vbox.addWidget(self.btn_delete)
         scan_box_layout.addLayout(btn_vbox, stretch=2)
-        
+
         header_layout.addWidget(scan_frame)
         main_layout.addWidget(header_widget)
 
@@ -766,42 +793,58 @@ class MainWindow(QMainWindow):
         self.listboxes = {}
         workspace_layout = QHBoxLayout()
         workspace_layout.setSpacing(pad_main)
-        
+
         # Panel Trái (Danh sách xử lý) ép stretch siêu nhỏ
         left_panel_container = QWidget()
         left_layout = QVBoxLayout(left_panel_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        self.create_zone_box(left_layout, "Danh sách xử lý", "#636e72", 0, 0, is_grid=False, show_badge=True, is_left_panel=True)
+        self.create_zone_box(left_layout, "Danh sách xử lý", "#636e72", 0, 0, is_grid=False, show_badge=True,
+                             is_left_panel=True)
         # Bóp Panel Trái xuống chiếm diện tích nhỏ gọn
         workspace_layout.addWidget(left_panel_container, stretch=12)
 
-        # Panel Phải
+        # Panel Phải (CHỨA CÁC TAB ẨN HIỆN)
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(pad_main)
 
+        # --- TAB MENU ---
+        tab_layout = QHBoxLayout()
+        tab_layout.setSpacing(0)
+
+        self.btn_tab_normal = QPushButton("🎯 PICK NORMAL (👤 0)")
+        self.btn_tab_normal.setObjectName("tab_active")  # Mặc định active
+        self.btn_tab_flow = QPushButton("🌊 FLOW PICK (👤 0)")
+        self.btn_tab_flow.setObjectName("tab_inactive")
+
+        self.btn_tab_normal.clicked.connect(lambda: self.switch_tab(0))
+        self.btn_tab_flow.clicked.connect(lambda: self.switch_tab(1))
+
+        tab_layout.addWidget(self.btn_tab_normal)
+        tab_layout.addWidget(self.btn_tab_flow)
+        tab_layout.addStretch()
+
+        # Đưa nút Refresh Task lên cùng dòng Tab để tiết kiệm thêm diện tích
+        btn_refresh_block = QPushButton("🔄 Tải lại số Task WMS")
+        btn_refresh_block.setObjectName("btn_refresh_block")
+        btn_refresh_block.clicked.connect(self.refresh_wms_tasks)
+        tab_layout.addWidget(btn_refresh_block)
+
+        right_layout.addLayout(tab_layout)
+
+        # --- STACKED WIDGET (Chứa 2 giao diện thay phiên hiển thị) ---
+        self.stacked_widget = QStackedWidget()
+
         # 1. Khu vực NORMAL
         normal_container = QWidget()
         normal_layout_main = QVBoxLayout(normal_container)
         normal_layout_main.setContentsMargins(0, 0, 0, 0)
-        normal_layout_main.setSpacing(int(2 * self.scale))
-        
-        lbl_normal = QLabel("Khu vực: PICK NORMAL")
-        lbl_normal.setStyleSheet(f"font-weight: bold; font-size: {max(10, int(13*self.scale))}px; color: #0984e3;")
-        btn_refresh_block = QPushButton("🔄 Refresh Block")
-        btn_refresh_block.setObjectName("btn_refresh_block")
-        btn_refresh_block.clicked.connect(self.refresh_wms_tasks)
-        h_header = QHBoxLayout()
-        h_header.addWidget(lbl_normal)
-        h_header.addStretch()
-        h_header.addWidget(btn_refresh_block)
-        normal_layout_main.addLayout(h_header)
 
-        # NORMAL GRID TỐI ƯU 2 HÀNG x 5 CỘT
+        # Đã bỏ các nhãn tiêu đề thừa vì Tab đã kiêm luôn chức năng đó.
         normal_grid = QGridLayout()
         normal_grid.setSpacing(int(2 * self.scale))
-        
+
         self.create_zone_box(normal_grid, "Block A", "#00b894", 0, 0, True)
         self.create_zone_box(normal_grid, "Block B", "#e17055", 0, 1, True)
         self.create_zone_box(normal_grid, "Block C", "#6c5ce7", 0, 2, True)
@@ -809,14 +852,17 @@ class MainWindow(QMainWindow):
 
         # --- Ô CONFIG NÉN VÀO LƯỚI ---
         config_frame = QFrame()
-        config_frame.setStyleSheet("QFrame { border: 2px solid #b2bec3; border-radius: 4px; background-color: #ffffff; }")
-        
+        config_frame.setStyleSheet(
+            "QFrame { border: 2px solid #b2bec3; border-radius: 4px; background-color: #ffffff; }")
+
         config_layout = QGridLayout(config_frame)
-        config_layout.setContentsMargins(int(2*self.scale), int(2*self.scale), int(2*self.scale), int(2*self.scale))
+        config_layout.setContentsMargins(int(2 * self.scale), int(2 * self.scale), int(2 * self.scale),
+                                         int(2 * self.scale))
         config_layout.setSpacing(int(1 * self.scale))
 
         lbl_cfg_title = QLabel("⚙️ Config")
-        lbl_cfg_title.setStyleSheet(f"font-weight: bold; font-size: {max(9, int(11*self.scale))}px; color: #636e72; border: none;")
+        lbl_cfg_title.setStyleSheet(
+            f"font-weight: bold; font-size: {max(9, int(11 * self.scale))}px; color: #636e72; border: none;")
         config_layout.addWidget(lbl_cfg_title, 0, 0, 1, 2)
 
         self.txt_cfg_a = QLineEdit()
@@ -825,42 +871,37 @@ class MainWindow(QMainWindow):
 
         font_size_cfg = max(8, int(10 * self.scale))
         input_style = f"QLineEdit {{ border: 1px solid #cbd5e1; border-radius: 2px; padding: 1px 2px; color: #2d3436; font-size: {font_size_cfg}px;}}"
-        
-        for idx, (lbl_text, txt_widget) in enumerate([("A:", self.txt_cfg_a), ("B:", self.txt_cfg_b), ("C:", self.txt_cfg_c)]):
+
+        for idx, (lbl_text, txt_widget) in enumerate(
+                [("A:", self.txt_cfg_a), ("B:", self.txt_cfg_b), ("C:", self.txt_cfg_c)]):
             lbl = QLabel(lbl_text)
             lbl.setStyleSheet(f"font-weight: bold; color: #2d3436; border: none; font-size: {font_size_cfg}px;")
             txt_widget.setStyleSheet(input_style)
             txt_widget.setReadOnly(True)
-            config_layout.addWidget(lbl, idx+1, 0)
-            config_layout.addWidget(txt_widget, idx+1, 1)
+            config_layout.addWidget(lbl, idx + 1, 0)
+            config_layout.addWidget(txt_widget, idx + 1, 1)
 
         self.btn_edit_config = QPushButton("Edit")
-        self.btn_edit_config.setStyleSheet(f"QPushButton {{ background-color: #0984e3; padding: {int(2*self.scale)}px; border-radius: 2px; color: white; font-weight: bold; font-size: {font_size_cfg}px;}} QPushButton:hover {{ background-color: #74b9ff; }}")
+        self.btn_edit_config.setStyleSheet(
+            f"QPushButton {{ background-color: #0984e3; padding: {int(2 * self.scale)}px; border-radius: 2px; color: white; font-weight: bold; font-size: {font_size_cfg}px;}} QPushButton:hover {{ background-color: #74b9ff; }}")
         self.btn_edit_config.clicked.connect(self.toggle_config_edit)
         config_layout.addWidget(self.btn_edit_config, 4, 0, 1, 2)
 
-        # Config đặt ở góc phải trên cùng và chiếm độ cao 2 hàng
-        normal_grid.addWidget(config_frame, 0, 4, 2, 1) 
+        normal_grid.addWidget(config_frame, 0, 4, 2, 1)
         # ---------------------
 
         self.create_zone_box(normal_grid, "Block A&C", "#0984e3", 1, 0, True)
         self.create_zone_box(normal_grid, "Block B&C", "#0984e3", 1, 1, True)
         self.create_zone_box(normal_grid, "Block A&B&C", "#d63031", 1, 2, True, colspan=2)
-        
+
         normal_layout_main.addLayout(normal_grid)
-        right_layout.addWidget(normal_container, stretch=1)
+        self.stacked_widget.addWidget(normal_container)  # Thêm vào lớp 0 của Stack
 
         # 2. Khu vực FLOW PICK
         flow_container = QWidget()
         flow_layout_main = QVBoxLayout(flow_container)
         flow_layout_main.setContentsMargins(0, 0, 0, 0)
-        flow_layout_main.setSpacing(int(2 * self.scale))
-        
-        lbl_flow = QLabel("Khu vực: FLOW PICK")
-        lbl_flow.setStyleSheet(f"font-weight: bold; font-size: {max(10, int(13*self.scale))}px; color: #e17055;")
-        flow_layout_main.addWidget(lbl_flow)
 
-        # FLOW PICK TỐI ƯU 2 HÀNG x 7 CỘT (ÉP CHIỀU NGANG THAY VÌ CHIỀU DỌC)
         flow_grid = QGridLayout()
         flow_grid.setSpacing(int(2 * self.scale))
 
@@ -880,28 +921,47 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "CB", "#6c5ce7", 1, 5, True, colspan=2)
 
         flow_layout_main.addLayout(flow_grid)
-        right_layout.addWidget(flow_container, stretch=1)
+        self.stacked_widget.addWidget(flow_container)  # Thêm vào lớp 1 của Stack
 
-        # Phân bổ lại Panel phải
+        right_layout.addWidget(self.stacked_widget, stretch=1)
         workspace_layout.addWidget(right_panel, stretch=88)
-        
+
         main_layout.addLayout(workspace_layout)
 
-    def create_zone_box(self, parent_layout, title, border_color, row, col, is_grid=False, show_badge=True, colspan=1, is_left_panel=False):
+    def switch_tab(self, index):
+        """Chuyển đổi qua lại giữa Pick Normal và Flow Pick"""
+        self.stacked_widget.setCurrentIndex(index)
+
+        # Đổi style của nút tab để báo hiệu đang xem tab nào
+        if index == 0:
+            self.btn_tab_normal.setObjectName("tab_active")
+            self.btn_tab_flow.setObjectName("tab_inactive")
+        else:
+            self.btn_tab_normal.setObjectName("tab_inactive")
+            self.btn_tab_flow.setObjectName("tab_active")
+
+        # Áp dụng lại style
+        self.btn_tab_normal.style().unpolish(self.btn_tab_normal)
+        self.btn_tab_normal.style().polish(self.btn_tab_normal)
+        self.btn_tab_flow.style().unpolish(self.btn_tab_flow)
+        self.btn_tab_flow.style().polish(self.btn_tab_flow)
+
+    def create_zone_box(self, parent_layout, title, border_color, row, col, is_grid=False, show_badge=True, colspan=1,
+                        is_left_panel=False):
         box_frame = QFrame()
         box_frame.setObjectName("zone_box_frame")
-        box_frame.setStyleSheet(f"#zone_box_frame {{ border: 2px solid {border_color}; border-radius: 4px; background-color: #ffffff; }}")
-        
+        box_frame.setStyleSheet(
+            f"#zone_box_frame {{ border: 2px solid {border_color}; border-radius: 4px; background-color: #ffffff; }}")
+
         box_layout = QVBoxLayout(box_frame)
-        # NÉN MARGIN BÊN TRONG TỪNG BLOCK XUỐNG MỨC SIÊU MỎNG (Chỉ 1-2px)
         pad_box = max(1, int(2 * self.scale))
         box_layout.setContentsMargins(pad_box, pad_box, pad_box, pad_box)
         box_layout.setSpacing(0)
-        
+
         h_layout = QHBoxLayout()
         h_layout.setContentsMargins(0, 0, 0, 0)
         lbl_title = QLabel(title)
-        
+
         font_size_title = max(9, int(11 * self.scale))
         lbl_title.setStyleSheet(f"font-weight: bold; font-size: {font_size_title}px; color: {border_color};")
         h_layout.addWidget(lbl_title)
@@ -912,7 +972,8 @@ class MainWindow(QMainWindow):
         if show_badge:
             badge = QLabel("0")
             font_size_badge = max(8, int(10 * self.scale))
-            badge.setStyleSheet(f"background-color: white; color: {border_color}; font-weight: bold; border: 1px solid {border_color}; border-radius: 2px; padding: 1px 3px; font-size: {font_size_badge}px;")
+            badge.setStyleSheet(
+                f"background-color: white; color: {border_color}; font-weight: bold; border: 1px solid {border_color}; border-radius: 2px; padding: 1px 3px; font-size: {font_size_badge}px;")
             h_layout.addWidget(badge)
             self.badges[lw_title] = badge
 
@@ -925,23 +986,42 @@ class MainWindow(QMainWindow):
         lw.setContextMenuPolicy(Qt.CustomContextMenu)
         lw.customContextMenuRequested.connect(lambda pos, lw_ref=lw: self.on_context_menu(pos, lw_ref))
         box_layout.addWidget(lw)
-        
+
         if is_left_panel:
             parent_layout.addWidget(box_frame)
         elif is_grid:
             parent_layout.addWidget(box_frame, row, col, 1, colspan)
-            
+
         self.listboxes[lw_title] = lw
 
     def update_all_badges(self):
+        """Cập nhật bộ đếm Số Người và Số Task hiển thị lên UI"""
         if not hasattr(self, 'badges'): return
+
+        total_normal = 0
+        total_flow = 0
+
+        # Vòng lặp đếm tất cả số người
         for title, lb in self.listboxes.items():
+            people_count = lb.count()
+
+            if title in NORMAL_BLOCKS:
+                total_normal += people_count
+            elif title in FLOW_ZONES:
+                total_flow += people_count
+
             if title in self.badges:
+                # Tùy biến hiển thị badge trên từng ô
                 if title in NORMAL_BLOCKS:
                     task_count = self.task_counts.get(title, 0)
-                    self.badges[title].setText(f"📦 {task_count}")
+                    self.badges[title].setText(f"👤 {people_count} | 📦 {task_count}")
                 else:
-                    self.badges[title].setText(f"👤 {lb.count()}")
+                    self.badges[title].setText(f"👤 {people_count}")
+
+        # Cập nhật tổng số lên tiêu đề Tab
+        if hasattr(self, 'btn_tab_normal'):
+            self.btn_tab_normal.setText(f"🎯 PICK NORMAL (👤 Tổng: {total_normal})")
+            self.btn_tab_flow.setText(f"🌊 FLOW PICK (👤 Tổng: {total_flow})")
 
     def start_initialization(self):
         init_thread = InitDataThread()
@@ -1108,7 +1188,7 @@ class MainWindow(QMainWindow):
         self.current_firebase_data = {}
         if not pickers_dict:
             self.update_all_badges()
-            self.refresh_wms_tasks()  
+            self.refresh_wms_tasks()
             return
         if isinstance(pickers_dict, list):
             pickers_dict = {str(i): v for i, v in enumerate(pickers_dict) if v is not None}
@@ -1141,14 +1221,14 @@ class MainWindow(QMainWindow):
         if self.btn_edit_config.text() == "Edit":
             self.btn_edit_config.setText("Submit")
             self.btn_edit_config.setStyleSheet(
-                f"QPushButton {{ background-color: #00b894; padding: {int(2*self.scale)}px; border-radius: 2px; color: white; font-weight: bold; font-size: {font_size_cfg}px;}} QPushButton:hover {{ background-color: #55efc4; }}")
+                f"QPushButton {{ background-color: #00b894; padding: {int(2 * self.scale)}px; border-radius: 2px; color: white; font-weight: bold; font-size: {font_size_cfg}px;}} QPushButton:hover {{ background-color: #55efc4; }}")
             self.txt_cfg_a.setReadOnly(False)
             self.txt_cfg_b.setReadOnly(False)
             self.txt_cfg_c.setReadOnly(False)
         else:
             self.btn_edit_config.setText("Edit")
             self.btn_edit_config.setStyleSheet(
-                f"QPushButton {{ background-color: #0984e3; padding: {int(2*self.scale)}px; border-radius: 2px; color: white; font-weight: bold; font-size: {font_size_cfg}px;}} QPushButton:hover {{ background-color: #74b9ff; }}")
+                f"QPushButton {{ background-color: #0984e3; padding: {int(2 * self.scale)}px; border-radius: 2px; color: white; font-weight: bold; font-size: {font_size_cfg}px;}} QPushButton:hover {{ background-color: #74b9ff; }}")
             self.txt_cfg_a.setReadOnly(True)
             self.txt_cfg_b.setReadOnly(True)
             self.txt_cfg_c.setReadOnly(True)
@@ -1162,7 +1242,7 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-    
+
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
