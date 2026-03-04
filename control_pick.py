@@ -279,7 +279,8 @@ class FetchTasksThread(QThread):
             self.tasks_fetched.emit({})
             return
 
-        counts = {block: 0 for block in NORMAL_BLOCKS}
+        # Đổi cấu trúc đếm để lưu cả Normal và Urgent
+        counts = {block: {"normal": 0, "urgent": 0} for block in NORMAL_BLOCKS}
 
         cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
         cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
@@ -309,12 +310,11 @@ class FetchTasksThread(QThread):
         }
         url = "https://wms.ssc.shopee.vn/api/v2/apps/process/taskcenter/pickingtask/search_sales_sub_picking_task"
 
-        all_tasks = []
-        pageno = 1
+        def fetch_tasks(channel_ids, task_type):
+            all_tasks = []
+            pageno = 1
 
-        try:
             while True:
-                # Cập nhật Payload: Thêm paperless và is_add_picking
                 payload = {
                     "start_time": start_ts,
                     "end_time": end_ts,
@@ -323,14 +323,12 @@ class FetchTasksThread(QThread):
                     "is_add_picking": 0,
                     "fulfillment_chain_dest_zone_list": [],
                     "pageno": pageno,
-                    "count": 200
+                    "count": 200,
+                    "channel_id": channel_ids
                 }
 
-                print(f"[DEBUG][WMS Tasks] Lấy Page {pageno} - Payload: {json.dumps(payload)}")
+                print(f"[DEBUG][WMS Tasks] Lấy Page {pageno} ({task_type}) - Payload: {json.dumps(payload)}")
                 res = requests.post(url, json=payload, headers=headers, timeout=10)
-
-                if pageno == 1:
-                    print(f"[DEBUG][WMS Tasks] API Response (Mẫu Page 1): {res.text[:500]}...")
 
                 if res.status_code != 200:
                     print(f"[DEBUG][WMS Tasks] Lỗi HTTP: {res.status_code}")
@@ -347,9 +345,7 @@ class FetchTasksThread(QThread):
                     break
                 pageno += 1
 
-            print(f"[DEBUG][WMS Tasks] TỔNG SỐ TASK THỰC TẾ TRẢ VỀ: {len(all_tasks)}")
-            if all_tasks:
-                print(f"[DEBUG][WMS Tasks] Dữ liệu mẫu 1 Task đầu tiên: {json.dumps(all_tasks[0], ensure_ascii=False)}")
+            print(f"[DEBUG][WMS Tasks] TỔNG SỐ TASK {task_type.upper()} THỰC TẾ TRẢ VỀ: {len(all_tasks)}")
 
             # Phân loại Task
             for task in all_tasks:
@@ -361,21 +357,26 @@ class FetchTasksThread(QThread):
                 has_c = bool(t_zones & cfg_c)
 
                 if has_a and has_b and has_c:
-                    counts["Block A&B&C"] += 1
+                    counts["Block A&B&C"][task_type] += 1
                 elif has_a and has_b:
-                    counts["Block A&B"] += 1
+                    counts["Block A&B"][task_type] += 1
                 elif has_a and has_c:
-                    counts["Block A&C"] += 1
+                    counts["Block A&C"][task_type] += 1
                 elif has_b and has_c:
-                    counts["Block B&C"] += 1
+                    counts["Block B&C"][task_type] += 1
                 elif has_a:
-                    counts["Block A"] += 1
+                    counts["Block A"][task_type] += 1
                 elif has_b:
-                    counts["Block B"] += 1
+                    counts["Block B"][task_type] += 1
                 elif has_c:
-                    counts["Block C"] += 1
+                    counts["Block C"][task_type] += 1
 
-            print(f"[DEBUG][WMS Tasks] TỔNG TASKS GOM ĐƯỢC: {len(all_tasks)}")
+        try:
+            # 1. Call API cho đơn thường
+            fetch_tasks("50011,50021,50032", "normal")
+            # 2. Call API cho đơn Hỏa Tốc
+            fetch_tasks("50033,50051", "urgent")
+
             print(f"[DEBUG][WMS Tasks] KẾT QUẢ ĐẾM TỪNG BLOCK: {counts}")
             self.tasks_fetched.emit(counts)
 
@@ -670,11 +671,18 @@ class ZoneListWidget(QListWidget):
                 if isinstance(data, dict):
                     data["block"] = self.zone_name
 
-                    if self.zone_name in FLOW_ZONES or self.zone_name == "":
+                    # --- LOGIC XỬ LÝ HỎA TỐC: Không mất Hỏa Tốc nếu ném vào Normal ---
+                    if self.zone_name in NORMAL_BLOCKS:
+                        # Giữ nguyên trạng thái urgent nếu thả vào Normal Block (giữ nguyên "Y" hoặc "N")
+                        pass
+                    elif self.zone_name in FLOW_ZONES or self.zone_name == "":
+                        # Nếu bị thả vào Flow Pick hoặc Danh Sách Chờ thì mất Hỏa Tốc
                         data["urgent"] = "N"
 
                     prefix = "🔥 " if data.get("urgent") == "Y" else ""
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
+
+                    # BẮT BUỘC SAVE DATA VÀO LẠI ITEM SAU KHI SỬA
                     taken_item.setData(Qt.UserRole, data)
 
                     self.insertItem(row, taken_item)
@@ -1013,8 +1021,17 @@ class MainWindow(QMainWindow):
             if title in self.badges:
                 # Tùy biến hiển thị badge trên từng ô
                 if title in NORMAL_BLOCKS:
-                    task_count = self.task_counts.get(title, 0)
-                    self.badges[title].setText(f"👤 {people_count} | 📦 {task_count}")
+                    task_data = self.task_counts.get(title, {"normal": 0, "urgent": 0})
+
+                    # Guard an toàn phòng trường hợp data bị cũ là số nguyên (int)
+                    if isinstance(task_data, int):
+                        task_data = {"normal": task_data, "urgent": 0}
+
+                    t_norm = task_data.get("normal", 0)
+                    t_urg = task_data.get("urgent", 0)
+
+                    # Hiển thị theo format: Người | Task Thường | Task Hỏa Tốc
+                    self.badges[title].setText(f"👤 {people_count} | 📦 {t_norm} | 🔥 {t_urg}")
                 else:
                     self.badges[title].setText(f"👤 {people_count}")
 
@@ -1031,7 +1048,8 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(object, str, str)
     def on_init_finished(self, cached_data, wfm_cookie, wms_cookie):
-        self.cached_data, self.wfm_cookie, self.wms_cookie = cached_data, wfm_cookie, wms_cookie
+        self.cached_data, wfm_cookie, wms_cookie = cached_data, wfm_cookie, wms_cookie
+        self.wfm_cookie, self.wms_cookie = wfm_cookie, wms_cookie
         self.progress_bar.setRange(0, 100);
         self.progress_bar.setValue(100)
         self.lbl_status.setText(f"✅ Sẵn sàng! Đã tải {len(self.cached_data)} nhân sự.")
@@ -1109,6 +1127,9 @@ class MainWindow(QMainWindow):
         prefix = "🔥 " if data["urgent"] == "Y" else ""
         item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
 
+        # BẮT BUỘC LƯU NGƯỢC DATA VÀO LẠI ITEM ĐỂ FIX LỖI KHI KÉO THẢ MẤT CỜ
+        item.setData(Qt.UserRole, data)
+
         self.current_firebase_data[data["user_id"]] = data
         self.start_thread(FirebaseUpdateThread("PUT", data=data))
 
@@ -1137,6 +1158,9 @@ class MainWindow(QMainWindow):
             data["urgent"] = "Y" if action == act_y else "N"
             prefix = "🔥 " if data["urgent"] == "Y" else ""
             item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
+
+            # BẮT BUỘC LƯU NGƯỢC DATA VÀO LẠI ITEM ĐỂ FIX LỖI KHI KÉO THẢ MẤT CỜ
+            item.setData(Qt.UserRole, data)
 
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
 
