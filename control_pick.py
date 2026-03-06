@@ -122,13 +122,6 @@ def get_dynamic_qss(scale):
     QPushButton#btn_delete:hover {{
         background-color: #ff7675;
     }}
-    QPushButton#btn_refresh_block {{
-        background-color: #e17055;
-        padding: {pad_xs}px {pad_med}px;
-    }}
-    QPushButton#btn_refresh_block:hover {{
-        background-color: #fab1a0;
-    }}
     QProgressBar {{
         border: 1px solid #cbd5e1;
         border-radius: 4px;
@@ -785,8 +778,11 @@ class MainWindow(QMainWindow):
         # Cột phải Header (Nút chức năng)
         btn_vbox = QVBoxLayout()
         btn_vbox.setSpacing(int(2 * self.scale))
+        
+        # Nút "Tải lại" dùng chung cho cả Firebase và Task WMS
         btn_refresh = QPushButton("🔄 Tải lại")
-        btn_refresh.clicked.connect(self.refresh_firebase)
+        btn_refresh.clicked.connect(self.refresh_all_data)
+        
         self.btn_delete = QPushButton("❌ Xóa chọn")
         self.btn_delete.setObjectName("btn_delete")
         self.btn_delete.clicked.connect(self.delete_selected_items)
@@ -832,12 +828,6 @@ class MainWindow(QMainWindow):
         tab_layout.addWidget(self.btn_tab_normal)
         tab_layout.addWidget(self.btn_tab_flow)
         tab_layout.addStretch()
-
-        # Đưa nút Refresh Task lên cùng dòng Tab để tiết kiệm thêm diện tích
-        btn_refresh_block = QPushButton("🔄 Tải lại số Task WMS")
-        btn_refresh_block.setObjectName("btn_refresh_block")
-        btn_refresh_block.clicked.connect(self.refresh_wms_tasks)
-        tab_layout.addWidget(btn_refresh_block)
 
         right_layout.addLayout(tab_layout)
 
@@ -1054,7 +1044,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(100)
         self.lbl_status.setText(f"✅ Sẵn sàng! Đã tải {len(self.cached_data)} nhân sự.")
         self.lbl_status.setStyleSheet("color: #00b894;")
-        self.refresh_firebase()
+        self.refresh_all_data()
 
     @pyqtSlot(str)
     def on_init_error(self, err):
@@ -1175,8 +1165,9 @@ class MainWindow(QMainWindow):
                 lb.takeItem(lb.row(item))
         self.update_all_badges()
 
-    def refresh_firebase(self):
-        self.lbl_status.setText("🔄 Đang đồng bộ dữ liệu Picker...")
+    def refresh_all_data(self):
+        # Đã đổi tên hàm và gọi Firebase trước, sau đó tự động gọi WMS bên trong callback
+        self.lbl_status.setText("🔄 Đang đồng bộ dữ liệu Picker và Config...")
         self.progress_bar.setRange(0, 0)
         fetch_thread = FetchFirebaseThread()
         fetch_thread.data_fetched.connect(self.on_firebase_fetched)
@@ -1207,13 +1198,17 @@ class MainWindow(QMainWindow):
 
         if pickers_dict is None:
             self.lbl_status.setText("❌ Lỗi đồng bộ Firebase!")
+            self.refresh_wms_tasks() # Vẫn cố gắng lấy task WMS nếu Firebase lỗi
             return
+            
         for lb in self.listboxes.values(): lb.clear()
         self.current_firebase_data = {}
+        
         if not pickers_dict:
             self.update_all_badges()
             self.refresh_wms_tasks()
             return
+            
         if isinstance(pickers_dict, list):
             pickers_dict = {str(i): v for i, v in enumerate(pickers_dict) if v is not None}
 
@@ -1238,6 +1233,7 @@ class MainWindow(QMainWindow):
         self.lbl_status.setText("✅ Đã đồng bộ Firebase thành công!")
         self.lbl_status.setStyleSheet("color: #00b894;")
 
+        # Gọi tiếp lấy Task WMS ngay sau khi Firebase load xong
         self.refresh_wms_tasks()
 
     def toggle_config_edit(self):
@@ -1271,6 +1267,3 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
-
-
-
