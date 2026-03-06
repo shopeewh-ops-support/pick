@@ -145,7 +145,7 @@ def get_dynamic_qss(scale):
 
 
 # --- CONSTANTS ---
-FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "BC", "SPD", "SPC", "C1", "C2", "C3", "CA"]
+FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "BC", "SPD", "", "C1", "C2", "C3", "CA"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
@@ -1271,5 +1271,6 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
+
 
 
