@@ -922,7 +922,7 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "BC", "#e17055", 0, 6, True)
 
         self.create_zone_box(flow_grid, "SPD", "#e17055", 1, 0, True)
-        self.create_zone_box(flow_grid, "SPC", "#6c5ce7", 1, 1, True)
+        self.create_zone_box(flow_grid, "SPC", "#e17055", 1, 1, True)
         self.create_zone_box(flow_grid, "C1", "#6c5ce7", 1, 2, True)
         self.create_zone_box(flow_grid, "C2", "#6c5ce7", 1, 3, True)
         self.create_zone_box(flow_grid, "C3", "#6c5ce7", 1, 4, True)
@@ -1271,4 +1271,5 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
+
 
