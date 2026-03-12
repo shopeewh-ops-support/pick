@@ -138,7 +138,7 @@ def get_dynamic_qss(scale):
 
 
 # --- CONSTANTS ---
-FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "BC", "SPD", "SPC", "C1", "C2", "C3", "CA"]
+FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "BC", "SPD", "SPC", "C1", "C2", "C3"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
@@ -778,11 +778,11 @@ class MainWindow(QMainWindow):
         # Cột phải Header (Nút chức năng)
         btn_vbox = QVBoxLayout()
         btn_vbox.setSpacing(int(2 * self.scale))
-        
+
         # Nút "Tải lại" dùng chung cho cả Firebase và Task WMS
         btn_refresh = QPushButton("🔄 Tải lại")
         btn_refresh.clicked.connect(self.refresh_all_data)
-        
+
         self.btn_delete = QPushButton("❌ Xóa chọn")
         self.btn_delete.setObjectName("btn_delete")
         self.btn_delete.clicked.connect(self.delete_selected_items)
@@ -909,14 +909,13 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "A4", "#00cec9", 0, 3, True)
         self.create_zone_box(flow_grid, "B1", "#e17055", 0, 4, True)
         self.create_zone_box(flow_grid, "B2", "#e17055", 0, 5, True)
-        self.create_zone_box(flow_grid, "BC", "#e17055", 0, 6, True)
+        self.create_zone_box(flow_grid, "BC", "#e17055", 1, 0, True)
 
-        self.create_zone_box(flow_grid, "SPD", "#e17055", 1, 0, True)
-        self.create_zone_box(flow_grid, "SPC", "#e17055", 1, 1, True)
-        self.create_zone_box(flow_grid, "C1", "#6c5ce7", 1, 2, True)
-        self.create_zone_box(flow_grid, "C2", "#6c5ce7", 1, 3, True)
-        self.create_zone_box(flow_grid, "C3", "#6c5ce7", 1, 4, True)
-        self.create_zone_box(flow_grid, "CA", "#6c5ce7", 1, 5, True, colspan=2)
+        self.create_zone_box(flow_grid, "SPD", "#e17055", 1, 1, True)
+        self.create_zone_box(flow_grid, "SPC", "#e17055", 1, 2, True)
+        self.create_zone_box(flow_grid, "C1", "#6c5ce7", 1, 3, True)
+        self.create_zone_box(flow_grid, "C2", "#6c5ce7", 1, 4, True)
+        self.create_zone_box(flow_grid, "C3", "#6c5ce7", 1, 5, True)
 
         flow_layout_main.addLayout(flow_grid)
         self.stacked_widget.addWidget(flow_container)  # Thêm vào lớp 1 của Stack
@@ -1198,17 +1197,17 @@ class MainWindow(QMainWindow):
 
         if pickers_dict is None:
             self.lbl_status.setText("❌ Lỗi đồng bộ Firebase!")
-            self.refresh_wms_tasks() # Vẫn cố gắng lấy task WMS nếu Firebase lỗi
+            self.refresh_wms_tasks()  # Vẫn cố gắng lấy task WMS nếu Firebase lỗi
             return
-            
+
         for lb in self.listboxes.values(): lb.clear()
         self.current_firebase_data = {}
-        
+
         if not pickers_dict:
             self.update_all_badges()
             self.refresh_wms_tasks()
             return
-            
+
         if isinstance(pickers_dict, list):
             pickers_dict = {str(i): v for i, v in enumerate(pickers_dict) if v is not None}
 
