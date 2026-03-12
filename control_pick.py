@@ -378,6 +378,49 @@ class FetchTasksThread(QThread):
             self.tasks_fetched.emit({})
 
 
+class FetchFlowTasksThread(QThread):
+    tasks_fetched = pyqtSignal(dict)
+
+    def __init__(self, wms_cookie):
+        super().__init__()
+        self.wms_cookie = wms_cookie
+
+    def run(self):
+        if not self.wms_cookie:
+            self.tasks_fetched.emit({})
+            return
+
+        headers = {
+            "Sec-CH-UA": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
+            "Sec-CH-UA-Mobile": "?0",
+            "Sec-CH-UA-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Cookie": self.wms_cookie
+        }
+
+        url = "https://wms.ssc.shopee.vn/api/v2/apps/process/flowpicking/get_progress_monitoring_stats?group_id=VNVLFPOG0053&area_dimension_type=1&efficiency_ratio=2"
+
+        flow_counts = {}
+        try:
+            res = requests.get(url, headers=headers, timeout=10)
+            if res.status_code == 200:
+                data = res.json().get("data", {}).get("area_stat_list", [])
+                for item in data:
+                    # Lấy những zone cụ thể, bỏ qua is_total=1 (tổng)
+                    if item.get("is_total") == 0 and item.get("area_name"):
+                        area_name = item.get("area_name")
+                        order_qty = item.get("order_qty", 0)
+                        flow_counts[area_name] = order_qty
+                print(f"[DEBUG][Flow Tasks] Đã lấy thành công Flow Task: {flow_counts}")
+        except Exception as e:
+            print(f"[DEBUG][Flow Tasks] Lỗi API Flow Task: {e}")
+
+        self.tasks_fetched.emit(flow_counts)
+
+
 class FirebaseUpdateThread(QThread):
     finished_signal = pyqtSignal()
 
@@ -701,6 +744,7 @@ class MainWindow(QMainWindow):
         self.wfm_cookie = self.wms_cookie = ""
         self.current_firebase_data = {}
         self.task_counts = {}
+        self.flow_task_counts = {}
 
         self.badges = {}
 
@@ -1021,6 +1065,13 @@ class MainWindow(QMainWindow):
 
                     # Hiển thị theo format: Người | Task Thường | Task Hỏa Tốc
                     self.badges[title].setText(f"👤 {people_count} | 📦 {t_norm} | 🔥 {t_urg}")
+
+                # --- THÊM LOGIC HIỂN THỊ TASK CHO FLOW ZONES Ở ĐÂY ---
+                elif title in FLOW_ZONES:
+                    t_flow = self.flow_task_counts.get(title, 0)
+                    self.badges[title].setText(f"👤 {people_count} | 📦 {t_flow}")
+                # ----------------------------------------------------
+
                 else:
                     self.badges[title].setText(f"👤 {people_count}")
 
@@ -1173,10 +1224,17 @@ class MainWindow(QMainWindow):
         self.start_thread(fetch_thread)
 
     def refresh_wms_tasks(self):
-        self.lbl_status.setText("🔄 Đang lấy danh sách Sub-Tasks WMS...")
+        self.lbl_status.setText("🔄 Đang lấy danh sách Tasks WMS...")
+
+        # 1. Thread lấy Task Pick Normal
         task_thread = FetchTasksThread(self.wms_cookie, self.get_current_config())
         task_thread.tasks_fetched.connect(self.on_wms_tasks_fetched)
         self.start_thread(task_thread)
+
+        # 2. Thread lấy Task Flow Pick
+        flow_thread = FetchFlowTasksThread(self.wms_cookie)
+        flow_thread.tasks_fetched.connect(self.on_flow_tasks_fetched)
+        self.start_thread(flow_thread)
 
     @pyqtSlot(dict)
     def on_wms_tasks_fetched(self, counts):
@@ -1184,6 +1242,11 @@ class MainWindow(QMainWindow):
         self.update_all_badges()
         self.lbl_status.setText("✅ Đã làm mới số liệu Task WMS.")
         self.lbl_status.setStyleSheet("color: #00b894;")
+
+    @pyqtSlot(dict)
+    def on_flow_tasks_fetched(self, counts):
+        self.flow_task_counts = counts
+        self.update_all_badges()
 
     @pyqtSlot(object, object)
     def on_firebase_fetched(self, pickers_dict, config_dict):
