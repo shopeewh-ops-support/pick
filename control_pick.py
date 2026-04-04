@@ -241,7 +241,7 @@ class WMSUpdateRuleThread(QThread):
             else:  # Normal
                 payload["zone_id_list"] = list(normal_zones) if normal_zones else ["SA4"]
                 payload["flow_pick_working_zone_list"] = ["SA4"]
-                payload["channel_id_list"] = ["50033", "50051"] if is_urg else ["50011", "50021", "50032"]
+                payload["channel_id_list"] = ["50033", "50051", "50044"] if is_urg else ["50011", "50021", "50032"]
 
             print(f"\n[DEBUG][WMS Update Rule] Đang Set Rule cho Zone: '{self.target_zone}', Urgent: {is_urg}")
             print(f"[DEBUG][WMS Update Rule] Payload gửi đi: {json.dumps(payload, ensure_ascii=False)}")
@@ -368,7 +368,7 @@ class FetchTasksThread(QThread):
             # 1. Call API cho đơn thường
             fetch_tasks("50011,50021,50032", "normal")
             # 2. Call API cho đơn Hỏa Tốc
-            fetch_tasks("50033,50051", "urgent")
+            fetch_tasks("50033,50051,50044", "urgent")
 
             print(f"[DEBUG][WMS Tasks] KẾT QUẢ ĐẾM TỪNG BLOCK: {counts}")
             self.tasks_fetched.emit(counts)
