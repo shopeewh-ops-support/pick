@@ -138,7 +138,7 @@ def get_dynamic_qss(scale):
 
 
 # --- CONSTANTS ---
-FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "BC", "FD", "SPD", "SPC", "C1", "C2", "C3"]
+FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "FD", "C1", "C2", "C3"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
@@ -953,15 +953,11 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "A4", "#00cec9", 0, 3, True)
         self.create_zone_box(flow_grid, "B1", "#e17055", 0, 4, True)
         self.create_zone_box(flow_grid, "B2", "#e17055", 0, 5, True)
-        self.create_zone_box(flow_grid, "B3", "#e17055", 0, 6, True)
-
-        self.create_zone_box(flow_grid, "BC", "#e17055", 1, 0, True)
-        self.create_zone_box(flow_grid, "SPD", "#e17055", 1, 1, True)
-        self.create_zone_box(flow_grid, "SPC", "#e17055", 1, 2, True)
-        self.create_zone_box(flow_grid, "FD", "#e17055", 1, 3, True)
-        self.create_zone_box(flow_grid, "C1", "#6c5ce7", 1, 4, True)
-        self.create_zone_box(flow_grid, "C2", "#6c5ce7", 1, 5, True)
-        self.create_zone_box(flow_grid, "C3", "#6c5ce7", 1, 6, True)
+        self.create_zone_box(flow_grid, "B3", "#e17055", 1, 0, True)
+        self.create_zone_box(flow_grid, "FD", "#e17055", 1, 1, True)
+        self.create_zone_box(flow_grid, "C1", "#6c5ce7", 1, 2, True)
+        self.create_zone_box(flow_grid, "C2", "#6c5ce7", 1, 3, True)
+        self.create_zone_box(flow_grid, "C3", "#6c5ce7", 1, 4, True, colspan=2)
 
         flow_layout_main.addLayout(flow_grid)
         self.stacked_widget.addWidget(flow_container)  # Thêm vào lớp 1 của Stack
