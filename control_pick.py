@@ -279,8 +279,6 @@ class FetchTasksThread(QThread):
         cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
         cfg_c = set([z.strip() for z in self.config_data.get("Block C", "").split(",") if z.strip()])
 
-        print(f"\n[DEBUG][WMS Tasks] Cấu hình đang check Task -> Block A: {cfg_a}, Block B: {cfg_b}, Block C: {cfg_c}")
-
         # Tính time
         now = datetime.datetime.now()
         start_date = now - datetime.timedelta(days=6)
@@ -289,7 +287,6 @@ class FetchTasksThread(QThread):
         start_ts = int(start_dt.timestamp())
         end_ts = int(end_dt.timestamp())
 
-        # BỔ SUNG ĐẦY ĐỦ HEADERS CỦA BROWSER ĐỂ VƯỢT QUA WMS SECURITY
         headers = {
             "Sec-CH-UA": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
             "Sec-CH-UA-Mobile": "?0",
@@ -320,12 +317,8 @@ class FetchTasksThread(QThread):
                     "channel_id": channel_ids
                 }
 
-                print(f"[DEBUG][WMS Tasks] Lấy Page {pageno} ({task_type}) - Payload: {json.dumps(payload)}")
                 res = requests.post(url, json=payload, headers=headers, timeout=10)
-
-                if res.status_code != 200:
-                    print(f"[DEBUG][WMS Tasks] Lỗi HTTP: {res.status_code}")
-                    break
+                if res.status_code != 200: break
 
                 data = res.json().get("data", {})
                 batch_list = data.get("list", [])
@@ -337,8 +330,6 @@ class FetchTasksThread(QThread):
                 if not batch_list or (pageno * 200) >= total:
                     break
                 pageno += 1
-
-            print(f"[DEBUG][WMS Tasks] TỔNG SỐ TASK {task_type.upper()} THỰC TẾ TRẢ VỀ: {len(all_tasks)}")
 
             # Phân loại Task
             for task in all_tasks:
@@ -369,12 +360,101 @@ class FetchTasksThread(QThread):
             fetch_tasks("50011,50021,50032", "normal")
             # 2. Call API cho đơn Hỏa Tốc
             fetch_tasks("50033,50051,50044", "urgent")
-
-            print(f"[DEBUG][WMS Tasks] KẾT QUẢ ĐẾM TỪNG BLOCK: {counts}")
             self.tasks_fetched.emit(counts)
-
         except Exception as e:
             print(f"[DEBUG][WMS Tasks] Exception Lỗi Code: {e}")
+            self.tasks_fetched.emit({})
+
+
+# --- THREAD MỚI: Lấy danh sách task Dynamic Wave ---
+class FetchDynamicTasksThread(QThread):
+    tasks_fetched = pyqtSignal(dict)
+
+    def __init__(self, wms_cookie, config_data):
+        super().__init__()
+        self.wms_cookie = wms_cookie
+        self.config_data = config_data
+
+    def run(self):
+        if not self.wms_cookie:
+            self.tasks_fetched.emit({})
+            return
+
+        # Dùng set để đếm pickup_id không trùng lặp
+        counts = {block: set() for block in NORMAL_BLOCKS}
+
+        cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
+        cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
+        cfg_c = set([z.strip() for z in self.config_data.get("Block C", "").split(",") if z.strip()])
+
+        headers = {
+            "Sec-CH-UA": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
+            "Sec-CH-UA-Mobile": "?0",
+            "Sec-CH-UA-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Content-Type": "application/json",
+            "Cookie": self.wms_cookie
+        }
+        url = "https://wms.ssc.shopee.vn/api/v2/apps/process/taskcenter/virtual_pickingtask/search_sales_sub_picking_task"
+
+        pageno = 1
+        try:
+            while True:
+                payload = {
+                    "fulfillment_chain_dest_zone_list": [],
+                    "pageno": pageno,
+                    "count": 200
+                }
+
+                res = requests.post(url, json=payload, headers=headers, timeout=10)
+                if res.status_code != 200: break
+
+                data = res.json().get("data", {})
+                batch_list = data.get("list", [])
+                total = data.get("total", 0)
+
+                for task in batch_list:
+                    pickup_id = task.get("pickup_id")
+                    if not pickup_id:
+                        continue
+
+                    z_str = task.get("zone_list", "")
+                    t_zones = set([z.strip() for z in z_str.split(",") if z.strip()])
+
+                    has_a = bool(t_zones & cfg_a)
+                    has_b = bool(t_zones & cfg_b)
+                    has_c = bool(t_zones & cfg_c)
+
+                    # Phân bổ pickup_id vào block tương ứng
+                    if has_a and has_b and has_c:
+                        counts["Block A&B&C"].add(pickup_id)
+                    elif has_a and has_b:
+                        counts["Block A&B"].add(pickup_id)
+                    elif has_a and has_c:
+                        counts["Block A&C"].add(pickup_id)
+                    elif has_b and has_c:
+                        counts["Block B&C"].add(pickup_id)
+                    elif has_a:
+                        counts["Block A"].add(pickup_id)
+                    elif has_b:
+                        counts["Block B"].add(pickup_id)
+                    elif has_c:
+                        counts["Block C"].add(pickup_id)
+
+                if not batch_list or (pageno * 200) >= total:
+                    break
+                pageno += 1
+
+            # Lấy len của set để có số lượng pickup_id
+            final_counts = {k: len(v) for k, v in counts.items()}
+            print(f"[DEBUG][Dynamic Tasks] Đã lấy thành công Dynamic Task: {final_counts}")
+            self.tasks_fetched.emit(final_counts)
+
+        except Exception as e:
+            print(f"[DEBUG][Dynamic Tasks] Exception Lỗi Code: {e}")
             self.tasks_fetched.emit({})
 
 
@@ -409,12 +489,10 @@ class FetchFlowTasksThread(QThread):
             if res.status_code == 200:
                 data = res.json().get("data", {}).get("area_stat_list", [])
                 for item in data:
-                    # Lấy những zone cụ thể, bỏ qua is_total=1 (tổng)
                     if item.get("is_total") == 0 and item.get("area_name"):
                         area_name = item.get("area_name")
                         order_qty = item.get("order_qty", 0)
                         flow_counts[area_name] = order_qty
-                print(f"[DEBUG][Flow Tasks] Đã lấy thành công Flow Task: {flow_counts}")
         except Exception as e:
             print(f"[DEBUG][Flow Tasks] Lỗi API Flow Task: {e}")
 
@@ -446,19 +524,13 @@ class FirebaseUpdateThread(QThread):
                 }
                 url = f"{FIREBASE_PICKER_URL}/{safe_uid}.json"
                 res = requests.put(url, json=payload, timeout=10)
-                if res.status_code == 200:
-                    print(f"[DEBUG][Firebase] PUT thành công cho {uid} vào Block: {payload['block']}")
             elif self.action == "PUT_CONFIG" and self.data:
                 url = f"{FIREBASE_CONFIG_URL}.json"
                 res = requests.put(url, json=self.data, timeout=10)
-                if res.status_code == 200:
-                    print("[DEBUG][Firebase] PUT_CONFIG thành công")
             elif self.action == "DELETE" and self.user_id:
                 safe_uid = urllib.parse.quote(str(self.user_id), safe='')
                 url = f"{FIREBASE_PICKER_URL}/{safe_uid}.json"
                 res = requests.delete(url, timeout=10)
-                if res.status_code == 200:
-                    print(f"[DEBUG][Firebase] DELETE thành công cho {self.user_id}")
         except Exception as e:
             print(f"[DEBUG][Firebase] Lỗi Update: {e}")
         finally:
@@ -470,7 +542,6 @@ class InitDataThread(QThread):
     error_signal = pyqtSignal(str)
 
     def run(self):
-        print("[DEBUG] Bắt đầu tải Cookies và Google Sheet Data...")
         cached_data = []
         wfm_cookie = ""
         wms_cookie = ""
@@ -490,6 +561,7 @@ class InitDataThread(QThread):
                     elif isinstance(w_data, dict) and "cookie" in w_data:
                         wfm_cookie = "; ".join(w_data["cookie"]) if isinstance(w_data["cookie"], list) else w_data[
                             "cookie"]
+
                 v_data = data.get("vnvl") or data.get("VNVL")
                 if v_data:
                     if isinstance(v_data, str):
@@ -502,7 +574,6 @@ class InitDataThread(QThread):
             if not wfm_cookie: wfm_cookie = str(data)
             wfm_cookie = wfm_cookie.strip()
             wms_cookie = wms_cookie.strip()
-            print(f"[DEBUG] Cookies loaded. WFM: {bool(wfm_cookie)}, WMS: {bool(wms_cookie)}")
         except Exception as e:
             print(f"[DEBUG] Lỗi tải cookies: {e}")
 
@@ -521,10 +592,8 @@ class InitDataThread(QThread):
                             "UserID": row[0], "WMSID": row[1], "Email": row[2],
                             "Name": row[6], "Sex": row[7]
                         })
-            print(f"[DEBUG] Đã tải {len(cached_data)} dòng dữ liệu từ Google Sheet.")
             self.finished_signal.emit(cached_data, wfm_cookie, wms_cookie)
         except Exception as e:
-            print(f"[DEBUG] Lỗi Google Sheet: {e}")
             self.error_signal.emit(str(e))
 
 
@@ -539,11 +608,8 @@ class ProcessApiThread(QThread):
         self.wms_cookie = wms_cookie
 
     def run(self):
-        print(f"[DEBUG] Bắt đầu luồng ProcessApiThread cho text: {self.raw_text[:30]}...")
         id_list = [x.strip() for x in re.split(r'[\s,]+', self.raw_text) if x.strip()]
-        if not id_list:
-            print("[DEBUG] Không tìm thấy ID hợp lệ để xử lý.")
-            return
+        if not id_list: return
 
         headers_common = {
             "Sec-CH-UA": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
@@ -562,7 +628,6 @@ class ProcessApiThread(QThread):
         headers_wms["Cookie"] = self.wms_cookie
 
         for scanned_id in id_list:
-            print(f"\n[DEBUG] Đang xử lý ID: {scanned_id}")
             id_type = ""
             if re.match(r'^\d{6}$', scanned_id):
                 id_type = "wms"
@@ -570,7 +635,6 @@ class ProcessApiThread(QThread):
                 id_type = "user"
                 scanned_id = scanned_id.upper()
             else:
-                print(f"[DEBUG] ID '{scanned_id}' sai định dạng - BỎ QUA")
                 continue
 
             emp_name, emp_sex, emp_wmsid, emp_userid, emp_email = "Không xác định", "", scanned_id, scanned_id, ""
@@ -581,7 +645,6 @@ class ProcessApiThread(QThread):
                         (id_type == "user" and emp["UserID"].upper() == scanned_id):
                     emp_name, emp_sex, emp_wmsid, emp_userid, emp_email = emp["Name"], str(emp["Sex"]).strip().lower(), \
                         emp["WMSID"], emp["UserID"].upper(), emp.get("Email", "")
-                    print(f"[DEBUG] Đã tìm thấy {scanned_id} trong Google Sheet Cache.")
                     break
 
             wfm_success = wms_success = False
@@ -599,7 +662,6 @@ class ProcessApiThread(QThread):
                     res_search = requests.post(url_search, json=payload_search, headers=headers_wfm).json()
                     if res_search.get("retcode") == 0 and res_search.get("data") and res_search["data"].get("list"):
                         staff_info = res_search["data"]["list"][0]
-                        print(f"[DEBUG] WFM tìm thấy staff: {staff_info.get('staff_name')}")
                         if emp_name == "Không xác định": emp_name = staff_info.get("staff_name", "Không xác định")
                         if "wms_user_id" in staff_info: emp_wmsid = str(staff_info["wms_user_id"])
                         if "staff_no" in staff_info and emp_userid == scanned_id: emp_userid = staff_info[
@@ -609,10 +671,9 @@ class ProcessApiThread(QThread):
                         if staff_info.get("reporting_warehouse") == "VNVL":
                             wfm_success = True
                         else:
-                            print(f"[DEBUG] WFM: Nhân sự {scanned_id} không thuộc VNVL, bỏ qua (giữ màu đen).")
                             wfm_success = False
                 except Exception as e:
-                    print(f"[DEBUG] Lỗi WFM: {e}")
+                    pass
 
             # --- Bước 3: Gọi WMS ---
             if self.wms_cookie and emp_wmsid.isdigit():
@@ -630,7 +691,7 @@ class ProcessApiThread(QThread):
                             json=payload_wms, headers=headers_wms).json()
                         if res_create.get("retcode") == 0: wms_success = True
                 except Exception as e:
-                    print(f"[DEBUG] Lỗi WMS: {e}")
+                    pass
 
             # Đánh giá màu
             color_tag = "#2d3436"
@@ -642,7 +703,6 @@ class ProcessApiThread(QThread):
 
             result = {"name": emp_name, "wms_id": emp_wmsid, "user_id": emp_userid, "sex": emp_sex, "color": color_tag,
                       "block": "", "urgent": "N"}
-            print(f"[DEBUG] Hoàn tất xử lý {scanned_id}. Emitting signal...")
             self.result_ready.emit(result)
 
 
@@ -670,7 +730,6 @@ class ScanTextEdit(QTextEdit):
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not (event.modifiers() & Qt.ShiftModifier):
             txt = self.toPlainText()
-            print(f"[DEBUG] Enter detected in QTextEdit. Content length: {len(txt)}")
             self.enter_pressed.emit(txt)
             return
         super().keyPressEvent(event)
@@ -687,7 +746,6 @@ class ZoneListWidget(QListWidget):
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDefaultDropAction(Qt.MoveAction)
-        # Cho phép Widget nén hết cỡ nếu không có không gian
         self.setMinimumHeight(0)
 
     def dropEvent(self, event):
@@ -707,18 +765,14 @@ class ZoneListWidget(QListWidget):
                 if isinstance(data, dict):
                     data["block"] = self.zone_name
 
-                    # --- LOGIC XỬ LÝ HỎA TỐC: Không mất Hỏa Tốc nếu ném vào Normal ---
                     if self.zone_name in NORMAL_BLOCKS:
-                        # Giữ nguyên trạng thái urgent nếu thả vào Normal Block (giữ nguyên "Y" hoặc "N")
                         pass
                     elif self.zone_name in FLOW_ZONES or self.zone_name == "":
-                        # Nếu bị thả vào Flow Pick hoặc Danh Sách Chờ thì mất Hỏa Tốc
                         data["urgent"] = "N"
 
                     prefix = "🔥 " if data.get("urgent") == "Y" else ""
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
 
-                    # BẮT BUỘC SAVE DATA VÀO LẠI ITEM SAU KHI SỬA
                     taken_item.setData(Qt.UserRole, data)
 
                     self.insertItem(row, taken_item)
@@ -743,10 +797,13 @@ class MainWindow(QMainWindow):
         self.cached_data = []
         self.wfm_cookie = self.wms_cookie = ""
         self.current_firebase_data = {}
+
         self.task_counts = {}
         self.flow_task_counts = {}
+        self.dynamic_task_counts = {}  # Lưu count Dynamic Task
 
         self.badges = {}
+        self.dynamic_badges = {}  # Lưu tham chiếu tới Badge chứa Dynamic Tasks
 
         self.init_ui()
         self.setWindowState(Qt.WindowMaximized)
@@ -773,12 +830,11 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # GIẢM LỀ TỐI ĐA (Margins siêu nhỏ để nhường không gian cho nội dung chính)
         pad_main = max(2, int(4 * self.scale))
         main_layout.setContentsMargins(pad_main, pad_main, pad_main, pad_main)
         main_layout.setSpacing(pad_main)
 
-        # --- Header Nén ---
+        # --- Header ---
         header_widget = QWidget()
         header_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         header_layout = QHBoxLayout(header_widget)
@@ -791,7 +847,6 @@ class MainWindow(QMainWindow):
         scan_box_layout.setContentsMargins(int(4 * self.scale), int(4 * self.scale), int(4 * self.scale),
                                            int(4 * self.scale))
 
-        # Cột trái Header (Nhập liệu và Trạng thái)
         input_vbox = QVBoxLayout()
         input_vbox.setSpacing(int(2 * self.scale))
 
@@ -802,7 +857,6 @@ class MainWindow(QMainWindow):
 
         self.txt_scan = ScanTextEdit()
         self.txt_scan.setPlaceholderText("Paste ID và Enter...")
-        # ÉP TEXT BOX CHỈ CÒN ĐỦ CHIỀU CAO CHO 1-2 DÒNG
         self.txt_scan.setMaximumHeight(int(32 * self.scale))
         self.txt_scan.enter_pressed.connect(self.on_scan_triggered)
         input_vbox.addWidget(self.txt_scan)
@@ -819,11 +873,9 @@ class MainWindow(QMainWindow):
 
         scan_box_layout.addLayout(input_vbox, stretch=8)
 
-        # Cột phải Header (Nút chức năng)
         btn_vbox = QVBoxLayout()
         btn_vbox.setSpacing(int(2 * self.scale))
 
-        # Nút "Tải lại" dùng chung cho cả Firebase và Task WMS
         btn_refresh = QPushButton("🔄 Tải lại")
         btn_refresh.clicked.connect(self.refresh_all_data)
 
@@ -842,16 +894,13 @@ class MainWindow(QMainWindow):
         workspace_layout = QHBoxLayout()
         workspace_layout.setSpacing(pad_main)
 
-        # Panel Trái (Danh sách xử lý) ép stretch siêu nhỏ
         left_panel_container = QWidget()
         left_layout = QVBoxLayout(left_panel_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
         self.create_zone_box(left_layout, "Danh sách xử lý", "#636e72", 0, 0, is_grid=False, show_badge=True,
                              is_left_panel=True)
-        # Bóp Panel Trái xuống chiếm diện tích nhỏ gọn
         workspace_layout.addWidget(left_panel_container, stretch=12)
 
-        # Panel Phải (CHỨA CÁC TAB ẨN HIỆN)
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -862,7 +911,7 @@ class MainWindow(QMainWindow):
         tab_layout.setSpacing(0)
 
         self.btn_tab_normal = QPushButton("🎯 PICK NORMAL (👤 0)")
-        self.btn_tab_normal.setObjectName("tab_active")  # Mặc định active
+        self.btn_tab_normal.setObjectName("tab_active")
         self.btn_tab_flow = QPushButton("🌊 FLOW PICK (👤 0)")
         self.btn_tab_flow.setObjectName("tab_inactive")
 
@@ -875,15 +924,14 @@ class MainWindow(QMainWindow):
 
         right_layout.addLayout(tab_layout)
 
-        # --- STACKED WIDGET (Chứa 2 giao diện thay phiên hiển thị) ---
+        # --- STACKED WIDGET ---
         self.stacked_widget = QStackedWidget()
 
-        # 1. Khu vực NORMAL
+        # 1. NORMAL
         normal_container = QWidget()
         normal_layout_main = QVBoxLayout(normal_container)
         normal_layout_main.setContentsMargins(0, 0, 0, 0)
 
-        # Đã bỏ các nhãn tiêu đề thừa vì Tab đã kiêm luôn chức năng đó.
         normal_grid = QGridLayout()
         normal_grid.setSpacing(int(2 * self.scale))
 
@@ -892,7 +940,7 @@ class MainWindow(QMainWindow):
         self.create_zone_box(normal_grid, "Block C", "#6c5ce7", 0, 2, True)
         self.create_zone_box(normal_grid, "Block A&B", "#0984e3", 0, 3, True)
 
-        # --- Ô CONFIG NÉN VÀO LƯỚI ---
+        # --- CONFIG ---
         config_frame = QFrame()
         config_frame.setStyleSheet(
             "QFrame { border: 2px solid #b2bec3; border-radius: 4px; background-color: #ffffff; }")
@@ -930,16 +978,15 @@ class MainWindow(QMainWindow):
         config_layout.addWidget(self.btn_edit_config, 4, 0, 1, 2)
 
         normal_grid.addWidget(config_frame, 0, 4, 2, 1)
-        # ---------------------
 
         self.create_zone_box(normal_grid, "Block A&C", "#0984e3", 1, 0, True)
         self.create_zone_box(normal_grid, "Block B&C", "#0984e3", 1, 1, True)
         self.create_zone_box(normal_grid, "Block A&B&C", "#d63031", 1, 2, True, colspan=2)
 
         normal_layout_main.addLayout(normal_grid)
-        self.stacked_widget.addWidget(normal_container)  # Thêm vào lớp 0 của Stack
+        self.stacked_widget.addWidget(normal_container)
 
-        # 2. Khu vực FLOW PICK
+        # 2. FLOW PICK
         flow_container = QWidget()
         flow_layout_main = QVBoxLayout(flow_container)
         flow_layout_main.setContentsMargins(0, 0, 0, 0)
@@ -960,7 +1007,7 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "C3", "#6c5ce7", 1, 4, True, colspan=2)
 
         flow_layout_main.addLayout(flow_grid)
-        self.stacked_widget.addWidget(flow_container)  # Thêm vào lớp 1 của Stack
+        self.stacked_widget.addWidget(flow_container)
 
         right_layout.addWidget(self.stacked_widget, stretch=1)
         workspace_layout.addWidget(right_panel, stretch=88)
@@ -968,10 +1015,7 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(workspace_layout)
 
     def switch_tab(self, index):
-        """Chuyển đổi qua lại giữa Pick Normal và Flow Pick"""
         self.stacked_widget.setCurrentIndex(index)
-
-        # Đổi style của nút tab để báo hiệu đang xem tab nào
         if index == 0:
             self.btn_tab_normal.setObjectName("tab_active")
             self.btn_tab_flow.setObjectName("tab_inactive")
@@ -979,7 +1023,6 @@ class MainWindow(QMainWindow):
             self.btn_tab_normal.setObjectName("tab_inactive")
             self.btn_tab_flow.setObjectName("tab_active")
 
-        # Áp dụng lại style
         self.btn_tab_normal.style().unpolish(self.btn_tab_normal)
         self.btn_tab_normal.style().polish(self.btn_tab_normal)
         self.btn_tab_flow.style().unpolish(self.btn_tab_flow)
@@ -1009,12 +1052,28 @@ class MainWindow(QMainWindow):
         lw_title = title if title != "Danh sách xử lý" else ""
 
         if show_badge:
+            # Tạo VBox cho phần bên phải để chứa Badge (Trên) và Dynamic Badge (Dưới)
+            right_vbox = QVBoxLayout()
+            right_vbox.setSpacing(1)
+            right_vbox.setContentsMargins(0, 0, 0, 0)
+
             badge = QLabel("0")
             font_size_badge = max(8, int(10 * self.scale))
             badge.setStyleSheet(
                 f"background-color: white; color: {border_color}; font-weight: bold; border: 1px solid {border_color}; border-radius: 2px; padding: 1px 3px; font-size: {font_size_badge}px;")
-            h_layout.addWidget(badge)
+            right_vbox.addWidget(badge, alignment=Qt.AlignRight)
             self.badges[lw_title] = badge
+
+            # Nếu là NORMAL_BLOCKS thì thêm ô đếm Dynamic Wave bên dưới
+            if lw_title in NORMAL_BLOCKS:
+                dyn_badge = QLabel("⚡ Dynamic Wave: 0")
+                # Dùng màu tím (#8e44ad) để làm nổi bật thông số Dynamic Wave
+                dyn_badge.setStyleSheet(
+                    f"background-color: white; color: #8e44ad; font-weight: bold; border: 1px solid #8e44ad; border-radius: 2px; padding: 1px 3px; font-size: {font_size_badge}px;")
+                right_vbox.addWidget(dyn_badge, alignment=Qt.AlignRight)
+                self.dynamic_badges[lw_title] = dyn_badge
+
+            h_layout.addLayout(right_vbox)
 
         box_layout.addLayout(h_layout)
 
@@ -1034,13 +1093,11 @@ class MainWindow(QMainWindow):
         self.listboxes[lw_title] = lw
 
     def update_all_badges(self):
-        """Cập nhật bộ đếm Số Người và Số Task hiển thị lên UI"""
         if not hasattr(self, 'badges'): return
 
         total_normal = 0
         total_flow = 0
 
-        # Vòng lặp đếm tất cả số người
         for title, lb in self.listboxes.items():
             people_count = lb.count()
 
@@ -1050,30 +1107,26 @@ class MainWindow(QMainWindow):
                 total_flow += people_count
 
             if title in self.badges:
-                # Tùy biến hiển thị badge trên từng ô
                 if title in NORMAL_BLOCKS:
                     task_data = self.task_counts.get(title, {"normal": 0, "urgent": 0})
-
-                    # Guard an toàn phòng trường hợp data bị cũ là số nguyên (int)
-                    if isinstance(task_data, int):
-                        task_data = {"normal": task_data, "urgent": 0}
+                    if isinstance(task_data, int): task_data = {"normal": task_data, "urgent": 0}
 
                     t_norm = task_data.get("normal", 0)
                     t_urg = task_data.get("urgent", 0)
 
-                    # Hiển thị theo format: Người | Task Thường | Task Hỏa Tốc
                     self.badges[title].setText(f"👤 {people_count} | 📦 {t_norm} | 🔥 {t_urg}")
 
-                # --- THÊM LOGIC HIỂN THỊ TASK CHO FLOW ZONES Ở ĐÂY ---
+                    # Update Dynamic Badge
+                    if title in self.dynamic_badges:
+                        t_dyn = self.dynamic_task_counts.get(title, 0)
+                        self.dynamic_badges[title].setText(f"⚡ Dynamic Wave: {t_dyn}")
+
                 elif title in FLOW_ZONES:
                     t_flow = self.flow_task_counts.get(title, 0)
                     self.badges[title].setText(f"👤 {people_count} | 📦 {t_flow}")
-                # ----------------------------------------------------
-
                 else:
                     self.badges[title].setText(f"👤 {people_count}")
 
-        # Cập nhật tổng số lên tiêu đề Tab
         if hasattr(self, 'btn_tab_normal'):
             self.btn_tab_normal.setText(f"🎯 PICK NORMAL (👤 Tổng: {total_normal})")
             self.btn_tab_flow.setText(f"🌊 FLOW PICK (👤 Tổng: {total_flow})")
@@ -1100,7 +1153,6 @@ class MainWindow(QMainWindow):
         self.lbl_status.setStyleSheet("color: #d63031;")
 
     def on_scan_triggered(self, text):
-        print(f"[DEBUG] on_scan_triggered nhận text: {text}")
         self.txt_scan.clear()
         if not text.strip(): return
         self.lbl_status.setText("Đang xử lý dữ liệu nhập vào...")
@@ -1113,7 +1165,6 @@ class MainWindow(QMainWindow):
     def add_item_to_ui_and_firebase(self, data):
         uid = data.get("user_id", "")
         if not uid: return
-        print(f"[DEBUG] UI đang thêm user: {data['name']} ({uid})")
         if uid in self.current_firebase_data:
             data["block"] = self.current_firebase_data[uid].get("block", "")
             data["urgent"] = self.current_firebase_data[uid].get("urgent", "N")
@@ -1165,7 +1216,6 @@ class MainWindow(QMainWindow):
         prefix = "🔥 " if data["urgent"] == "Y" else ""
         item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
 
-        # BẮT BUỘC LƯU NGƯỢC DATA VÀO LẠI ITEM ĐỂ FIX LỖI KHI KÉO THẢ MẤT CỜ
         item.setData(Qt.UserRole, data)
 
         self.current_firebase_data[data["user_id"]] = data
@@ -1197,7 +1247,6 @@ class MainWindow(QMainWindow):
             prefix = "🔥 " if data["urgent"] == "Y" else ""
             item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
 
-            # BẮT BUỘC LƯU NGƯỢC DATA VÀO LẠI ITEM ĐỂ FIX LỖI KHI KÉO THẢ MẤT CỜ
             item.setData(Qt.UserRole, data)
 
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
@@ -1214,7 +1263,6 @@ class MainWindow(QMainWindow):
         self.update_all_badges()
 
     def refresh_all_data(self):
-        # Đã đổi tên hàm và gọi Firebase trước, sau đó tự động gọi WMS bên trong callback
         self.lbl_status.setText("🔄 Đang đồng bộ dữ liệu Picker và Config...")
         self.progress_bar.setRange(0, 0)
         fetch_thread = FetchFirebaseThread()
@@ -1234,6 +1282,11 @@ class MainWindow(QMainWindow):
         flow_thread.tasks_fetched.connect(self.on_flow_tasks_fetched)
         self.start_thread(flow_thread)
 
+        # 3. MỚI: Thread lấy Task Dynamic Wave
+        dynamic_thread = FetchDynamicTasksThread(self.wms_cookie, self.get_current_config())
+        dynamic_thread.tasks_fetched.connect(self.on_dynamic_tasks_fetched)
+        self.start_thread(dynamic_thread)
+
     @pyqtSlot(dict)
     def on_wms_tasks_fetched(self, counts):
         self.task_counts = counts
@@ -1244,6 +1297,11 @@ class MainWindow(QMainWindow):
     @pyqtSlot(dict)
     def on_flow_tasks_fetched(self, counts):
         self.flow_task_counts = counts
+        self.update_all_badges()
+
+    @pyqtSlot(dict)
+    def on_dynamic_tasks_fetched(self, counts):
+        self.dynamic_task_counts = counts
         self.update_all_badges()
 
     @pyqtSlot(object, object)
@@ -1258,7 +1316,7 @@ class MainWindow(QMainWindow):
 
         if pickers_dict is None:
             self.lbl_status.setText("❌ Lỗi đồng bộ Firebase!")
-            self.refresh_wms_tasks()  # Vẫn cố gắng lấy task WMS nếu Firebase lỗi
+            self.refresh_wms_tasks()
             return
 
         for lb in self.listboxes.values(): lb.clear()
@@ -1293,7 +1351,6 @@ class MainWindow(QMainWindow):
         self.lbl_status.setText("✅ Đã đồng bộ Firebase thành công!")
         self.lbl_status.setStyleSheet("color: #00b894;")
 
-        # Gọi tiếp lấy Task WMS ngay sau khi Firebase load xong
         self.refresh_wms_tasks()
 
     def toggle_config_edit(self):
