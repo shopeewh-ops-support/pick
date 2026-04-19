@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView,
                              QProgressBar, QMessageBox, QGroupBox, QComboBox, QLineEdit)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QDateTime, QTime, QEvent
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QIcon
 
 
 # ==========================================
@@ -218,7 +218,8 @@ class WorkerThread(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Shopee WMS Picking Analyzer (Export Mode)")
+        self.setWindowTitle("Ngọc Yến's Report Tool")
+        self.setWindowIcon(QIcon('emm.ico'))
         self.resize(1000, 700)
 
         self.cookie_string = ""
@@ -228,7 +229,7 @@ class MainWindow(QMainWindow):
         self.apply_styles()
 
         # Bắt đầu lấy Cookie ngay khi mở app
-        self.lbl_status.setText("Đang lấy thông tin xác thực từ Firebase...")
+        self.lbl_status.setText("Loading...")
         self.btn_run.setEnabled(False)
         self.init_cookie_thread = InitCookieThread()
         self.init_cookie_thread.cookie_signal.connect(self.on_cookie_loaded)
@@ -242,7 +243,7 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(15)
 
         # 1. Group Box Ngày Giờ (HH:mm:ss)
-        time_group = QGroupBox("Cài đặt Thời gian (UTC+7)")
+        time_group = QGroupBox("Chọn Create Time")
         time_layout = QHBoxLayout()
 
         # Định nghĩa thời gian mặc định
@@ -263,9 +264,9 @@ class MainWindow(QMainWindow):
         end_dt = QDateTime(now.date(), QTime(23, 59, 59))
         self.dt_end.setDateTime(end_dt)
 
-        time_layout.addWidget(QLabel("Từ (beg_ctime):"))
+        time_layout.addWidget(QLabel("Star Time:"))
         time_layout.addWidget(self.dt_begin)
-        time_layout.addWidget(QLabel("Đến (end_ctime):"))
+        time_layout.addWidget(QLabel("End Time:"))
         time_layout.addWidget(self.dt_end)
         time_group.setLayout(time_layout)
         main_layout.addWidget(time_group)
@@ -274,18 +275,18 @@ class MainWindow(QMainWindow):
         status_group = QGroupBox("Chọn Order Status")
         status_layout = QHBoxLayout()
 
-        self.cb_created = QCheckBox("Created (0)")
+        self.cb_created = QCheckBox("Created")
         self.cb_created.setProperty("val", "0")
 
-        self.cb_pending = QCheckBox("Pending Pick (9)")
+        self.cb_pending = QCheckBox("Pending Pick")
         self.cb_pending.setProperty("val", "9")
         self.cb_pending.setChecked(True)
 
-        self.cb_picking = QCheckBox("Picking (2)")
+        self.cb_picking = QCheckBox("Picking")
         self.cb_picking.setProperty("val", "2")
         self.cb_picking.setChecked(True)
 
-        self.cb_picked = QCheckBox("Picked (3)")
+        self.cb_picked = QCheckBox("Picked")
         self.cb_picked.setProperty("val", "3")
         self.cb_picked.setChecked(True)
 
@@ -300,9 +301,9 @@ class MainWindow(QMainWindow):
         action_layout = QHBoxLayout()
 
         # Filter Dropdown
-        filter_box = QGroupBox("Phân tích dữ liệu (Filter)")
+        filter_box = QGroupBox("Filter")
         filter_layout = QHBoxLayout()
-        filter_layout.addWidget(QLabel("Lọc New 3PL:"))
+        filter_layout.addWidget(QLabel("Filter by 3PL:"))
         self.combo_3pl = CheckableComboBox()
         self.combo_3pl.setEnabled(False)
         self.combo_3pl.update_display_text()
@@ -422,7 +423,7 @@ class MainWindow(QMainWindow):
     # --- Callbacks Firebase Cookie ---
     def on_cookie_loaded(self, cookie):
         self.cookie_string = cookie
-        self.lbl_status.setText("Trạng thái: Sẵn sàng (Đã lấy Cookies)")
+        self.lbl_status.setText("Trạng thái: Sẵn sàng")
         self.btn_run.setEnabled(True)
 
     def on_cookie_error(self, err_msg):
@@ -561,6 +562,7 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon('emm.ico'))
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
