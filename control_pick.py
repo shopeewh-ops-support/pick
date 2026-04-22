@@ -654,7 +654,7 @@ class InitDataThread(QThread):
 
         try:
             scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-            creds = Credentials.from_service_account_file("JSON5.json", scopes=scopes)
+            creds = Credentials.from_service_account_file("JSON4.json", scopes=scopes)
             client = gspread.authorize(creds)
             SHEET_ID = '1WZVgl1L86F75YVRqP4N8n2E3-K6AJCup6hKnVu3-0rE'
             worksheet = client.open_by_key(SHEET_ID).worksheet('Infomation_laborer/employee')
