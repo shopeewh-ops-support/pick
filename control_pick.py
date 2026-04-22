@@ -27,7 +27,7 @@ def get_scale_factor():
     return min(scale_w, scale_h, 1.0)
 
 
-# --- GIAO DIỆN HIỆN ĐẠI (MODERN DASHBOARD UI) ---
+# --- GIAO DIỆN HIỆN ĐẠI (MODERN PASTEL DASHBOARD UI) ---
 def get_dynamic_qss(scale):
     f_list = max(10, int(12 * scale))
     f_btn = max(10, int(12 * scale))
@@ -37,16 +37,16 @@ def get_dynamic_qss(scale):
     pad_small = max(4, int(6 * scale))
     pad_med = max(6, int(10 * scale))
 
-    # Bảng màu hiện đại (Dựa trên Tailwind CSS)
-    bg_main = "#F1F5F9"  # Nền tổng thể
-    bg_card = "#FFFFFF"  # Nền thẻ trắng
+    # Bảng màu hiện đại (Hồng Pastel chủ đạo)
+    bg_main = "#CDB7B5"  # Nền tổng thể (xám rất nhạt để làm nổi bật ô màu hồng)
+    bg_card = "#F5F5F5"  # Nền thẻ: Hồng pastel nhẹ nhàng (Tailwind pink-50)
+    bg_input = "#FFFFFF"  # Nền trắng cho các input/nút bấm để dễ nhìn
     text_main = "#1E293B"  # Chữ chính
     text_sub = "#64748B"  # Chữ phụ
-    border_color = "#E2E8F0"  # Viền nhạt
+    border_color = "#FCE7F3"  # Viền nhạt (Hồng nhạt hơn)
     primary = "#3B82F6"  # Xanh dương chính
     primary_hover = "#2563EB"
     danger = "#EF4444"  # Đỏ xóa
-    danger_hover = "#DC2626"
     success = "#10B981"  # Xanh lá thành công
 
     return f"""
@@ -66,12 +66,12 @@ def get_dynamic_qss(scale):
         margin: 0px 0px 0px 0px;
     }}
     QScrollBar::handle:vertical {{
-        background: #CBD5E1;
+        background: #F9A8D4; /* Thanh cuộn màu hồng nhạt */
         min-height: 20px;
         border-radius: 4px;
     }}
     QScrollBar::handle:vertical:hover {{
-        background: #94A3B8;
+        background: #F472B6;
     }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
         border: none;
@@ -85,12 +85,12 @@ def get_dynamic_qss(scale):
         margin: 0px 0px 0px 0px;
     }}
     QScrollBar::handle:horizontal {{
-        background: #CBD5E1;
+        background: #F9A8D4;
         min-width: 20px;
         border-radius: 4px;
     }}
     QScrollBar::handle:horizontal:hover {{
-        background: #94A3B8;
+        background: #F472B6;
     }}
     QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
         border: none;
@@ -115,12 +115,12 @@ def get_dynamic_qss(scale):
         background-color: {bg_card};
     }}
     QListWidget::item:selected {{
-        background-color: #EFF6FF; 
-        border: 1px solid #BFDBFE;
-        color: #1D4ED8;
+        background-color: #FCE7F3; /* Trạng thái chọn: Hồng tươi hơn chút */
+        border: 1px solid #FBCFE8;
+        color: #BE185D; /* Chữ màu hồng đậm */
     }}
     QListWidget::item:hover:!selected {{
-        background-color: #F8FAFC;
+        background-color: #FFF5F9;
     }}
 
     /* INPUTS */
@@ -128,31 +128,32 @@ def get_dynamic_qss(scale):
         border: 1px solid #CBD5E1;
         border-radius: 6px;
         padding: {pad_small}px;
-        background-color: {bg_card};
+        background-color: {bg_input};
         color: {text_main};
         font-size: {f_input}px;
     }}
     QTextEdit:focus, QLineEdit:focus {{
-        border: 1px solid {primary};
-        background-color: #F8FAFC;
+        border: 1px solid #F472B6; /* Viền focus màu hồng */
+        background-color: #FFFFFF;
     }}
 
     /* BUTTONS */
     QPushButton {{
-        background-color: {bg_card};
+        background-color: {bg_input};
         color: {text_main};
-        border: 1px solid {border_color};
+        border: 1px solid #CBD5E1;
         border-radius: 6px;
         padding: {pad_med}px {pad_med * 2}px;
         font-weight: 600;
         font-size: {f_btn}px;
     }}
     QPushButton:hover {{
-        background-color: #F8FAFC;
-        border-color: #CBD5E1;
+        background-color: #FCE7F3; /* Hover nút có hiệu ứng hồng */
+        border-color: #FBCFE8;
+        color: #BE185D;
     }}
     QPushButton:pressed {{
-        background-color: #E2E8F0;
+        background-color: #FBCFE8;
     }}
 
     /* PRIMARY BUTTONS */
@@ -163,6 +164,7 @@ def get_dynamic_qss(scale):
     }}
     QPushButton#btn_primary:hover {{
         background-color: {primary_hover};
+        color: white;
     }}
 
     /* TABS THIẾT KẾ MỚI (DẠNG PILL) */
@@ -183,8 +185,8 @@ def get_dynamic_qss(scale):
         padding: {pad_med}px {pad_med * 3}px;
     }}
     QPushButton#tab_inactive:hover {{
-        background-color: #E2E8F0;
-        color: {text_main};
+        background-color: #FCE7F3;
+        color: #BE185D;
     }}
 
     QPushButton#btn_delete {{
@@ -929,7 +931,7 @@ class MainWindow(QMainWindow):
         header_layout.setSpacing(int(8 * self.scale))
 
         scan_frame = QFrame()
-        scan_frame.setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; }")
+        scan_frame.setStyleSheet("QFrame { background-color: #F5F5F5; border: 1px solid #E2E8F0; border-radius: 8px; }")
         scan_box_layout = QHBoxLayout(scan_frame)
         scan_box_layout.setContentsMargins(pad_main, pad_main, pad_main, pad_main)
 
@@ -1033,7 +1035,7 @@ class MainWindow(QMainWindow):
         # --- CONFIG CARD ---
         config_frame = QFrame()
         config_frame.setStyleSheet(
-            "QFrame { border: 1px solid #E2E8F0; border-top: 4px solid #475569; border-radius: 8px; background-color: #FFFFFF; }")
+            "QFrame { border: 1px solid #E2E8F0; border-top: 4px solid #475569; border-radius: 8px; background-color: #F5F5F5; }")
 
         config_layout = QGridLayout(config_frame)
         config_layout.setContentsMargins(pad_main, pad_main, pad_main, pad_main)
@@ -1124,13 +1126,13 @@ class MainWindow(QMainWindow):
         box_frame = QFrame()
         box_frame.setObjectName("zone_box_frame")
 
-        # Thiết kế Card hiện đại: Viền mỏng, bo góc mềm, vạch màu nhấn ở trên cùng
+        # Thiết kế Card hiện đại: Viền mỏng, bo góc mềm, vạch màu nhấn ở trên cùng, Nền Hồng Pastel
         box_style = f"""
             #zone_box_frame {{
                 border: 1px solid #E2E8F0;
                 border-top: 4px solid {top_border_color};
                 border-radius: 8px;
-                background-color: #FFFFFF;
+                background-color: #F5F5F5; 
             }}
         """
         box_frame.setStyleSheet(box_style)
@@ -1159,14 +1161,14 @@ class MainWindow(QMainWindow):
             badge = QLabel("0")
             font_size_badge = max(9, int(11 * self.scale))
             badge.setStyleSheet(
-                f"background-color: #F8FAFC; color: {top_border_color}; font-weight: 600; border: 1px solid #E2E8F0; border-radius: 4px; padding: 2px 6px; font-size: {font_size_badge}px;")
+                f"background-color: #FFFFFF; color: {top_border_color}; font-weight: 600; border: 1px solid #E2E8F0; border-radius: 4px; padding: 2px 6px; font-size: {font_size_badge}px;")
             right_vbox.addWidget(badge, alignment=Qt.AlignRight)
             self.badges[lw_title] = badge
 
             if lw_title in NORMAL_BLOCKS:
                 dyn_badge = QLabel("⚡ Wave: 0")
                 dyn_badge.setStyleSheet(
-                    f"background-color: #FAF5FF; color: #9333EA; font-weight: 600; border: 1px solid #E9D5FF; border-radius: 4px; padding: 2px 6px; font-size: {font_size_badge}px;")
+                    f"background-color: #FFFFFF; color: #9333EA; font-weight: 600; border: 1px solid #E9D5FF; border-radius: 4px; padding: 2px 6px; font-size: {font_size_badge}px;")
                 right_vbox.addWidget(dyn_badge, alignment=Qt.AlignRight)
                 self.dynamic_badges[lw_title] = dyn_badge
 
