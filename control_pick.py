@@ -6,16 +6,25 @@ import requests
 import re
 import urllib.parse
 import datetime
+import unicodedata
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QProgressBar, QTextEdit,
                              QPushButton, QListWidget, QAbstractItemView,
                              QListWidgetItem, QMessageBox, QGridLayout, QFrame, QMenu, QLineEdit, QSizePolicy,
-                             QStackedWidget)
+                             QStackedWidget, QShortcut)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QRunnable, QThreadPool, pyqtSlot
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QFont, QColor, QKeySequence, QPainter
 
 import gspread
 from google.oauth2.service_account import Credentials
+
+
+# --- HÀM LOẠI BỎ DẤU TIẾNG VIỆT ---
+def remove_accents(input_str):
+    s = str(input_str)
+    s = unicodedata.normalize('NFD', s)
+    s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+    return s.replace('đ', 'd').replace('Đ', 'D')
 
 
 # --- HÀM TÍNH TỶ LỆ MÀN HÌNH (SCALE FACTOR) ---
@@ -38,8 +47,8 @@ def get_dynamic_qss(scale):
     pad_med = max(6, int(10 * scale))
 
     # Bảng màu hiện đại (Hồng Pastel chủ đạo)
-    bg_main = "#CDB7B5"  # Nền tổng thể (xám rất nhạt để làm nổi bật ô màu hồng)
-    bg_card = "#F5F5F5"  # Nền thẻ: Hồng pastel nhẹ nhàng (Tailwind pink-50)
+    bg_main = "#CDB7B5"  # Nền tổng thể
+    bg_card = "#F5F5F5"  # Nền thẻ: Hồng pastel nhẹ nhàng
     bg_input = "#FFFFFF"  # Nền trắng cho các input/nút bấm để dễ nhìn
     text_main = "#1E293B"  # Chữ chính
     text_sub = "#64748B"  # Chữ phụ
@@ -66,7 +75,7 @@ def get_dynamic_qss(scale):
         margin: 0px 0px 0px 0px;
     }}
     QScrollBar::handle:vertical {{
-        background: #F9A8D4; /* Thanh cuộn màu hồng nhạt */
+        background: #F9A8D4; 
         min-height: 20px;
         border-radius: 4px;
     }}
@@ -112,7 +121,7 @@ def get_dynamic_qss(scale):
         border-bottom: 1px solid {border_color};
         border-radius: 4px;
         margin-bottom: 2px;
-        background-color: {bg_card};
+        background-color: {bg_card}; 
     }}
     QListWidget::item:selected {{
         background-color: #FCE7F3; /* Trạng thái chọn: Hồng tươi hơn chút */
@@ -148,7 +157,7 @@ def get_dynamic_qss(scale):
         font-size: {f_btn}px;
     }}
     QPushButton:hover {{
-        background-color: #FCE7F3; /* Hover nút có hiệu ứng hồng */
+        background-color: #FCE7F3; 
         border-color: #FBCFE8;
         color: #BE185D;
     }}
@@ -236,7 +245,6 @@ sys.excepthook = log_uncaught_exceptions
 
 
 # --- WORKERS ---
-
 class WMSUpdateRuleThread(QThread):
     def __init__(self, target_zone, picker_list, config_data, wms_cookie):
         super().__init__()
@@ -323,13 +331,8 @@ class WMSUpdateRuleThread(QThread):
                 payload["channel_id_list"] = ["50033", "50051", "50044"] if is_urg else ["50011", "50021", "50032"]
                 payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0053", "VNVLFPOG0107"]
 
-            print(f"\n[DEBUG][WMS Update Rule] Đang Set Rule cho Zone: '{self.target_zone}', Urgent: {is_urg}")
-            print(f"[DEBUG][WMS Update Rule] Payload gửi đi: {json.dumps(payload, ensure_ascii=False)}")
-
             try:
-                res = requests.post(url, json=payload, headers=headers, timeout=10)
-                print(f"[DEBUG][WMS Update Rule] Status Code: {res.status_code}")
-                print(f"[DEBUG][WMS Update Rule] Response Text: {res.text}")
+                requests.post(url, json=payload, headers=headers, timeout=10)
             except Exception as e:
                 print(f"[DEBUG][WMS Update Rule] Lỗi API Request: {e}")
 
@@ -347,7 +350,6 @@ class FetchTasksThread(QThread):
 
     def run(self):
         if not self.wms_cookie:
-            print("[DEBUG][WMS Tasks] Lỗi: Chưa có WMS Cookie để gọi Task!")
             self.tasks_fetched.emit({})
             return
 
@@ -520,7 +522,6 @@ class FetchDynamicTasksThread(QThread):
                 pageno += 1
 
             final_counts = {k: len(v) for k, v in counts.items()}
-            print(f"[DEBUG][Dynamic Tasks] Đã lấy thành công Dynamic Task: {final_counts}")
             self.tasks_fetched.emit(final_counts)
 
         except Exception as e:
@@ -567,7 +568,7 @@ class FetchFlowTasksThread(QThread):
                                 flow_counts[area_name] = {"normal": 0, "urgent": 0}
                             flow_counts[area_name][task_type] += order_qty
             except Exception as e:
-                print(f"[DEBUG][Flow Tasks] Lỗi API Flow Task ({group_id}): {e}")
+                pass
 
         fetch_group("VNVLFPOG0053", "normal")
         fetch_group("VNVLFPOG0107", "urgent")
@@ -599,14 +600,14 @@ class FirebaseUpdateThread(QThread):
                     "urgent": self.data.get("urgent", "N")
                 }
                 url = f"{FIREBASE_PICKER_URL}/{safe_uid}.json"
-                res = requests.put(url, json=payload, timeout=10)
+                requests.put(url, json=payload, timeout=10)
             elif self.action == "PUT_CONFIG" and self.data:
                 url = f"{FIREBASE_CONFIG_URL}.json"
-                res = requests.put(url, json=self.data, timeout=10)
+                requests.put(url, json=self.data, timeout=10)
             elif self.action == "DELETE" and self.user_id:
                 safe_uid = urllib.parse.quote(str(self.user_id), safe='')
                 url = f"{FIREBASE_PICKER_URL}/{safe_uid}.json"
-                res = requests.delete(url, timeout=10)
+                requests.delete(url, timeout=10)
         except Exception as e:
             print(f"[DEBUG][Firebase] Lỗi Update: {e}")
         finally:
@@ -813,7 +814,6 @@ class FetchFirebaseThread(QThread):
 
 
 # --- UI COMPONENTS ---
-
 class ScanTextEdit(QTextEdit):
     enter_pressed = pyqtSignal(str)
 
@@ -828,15 +828,38 @@ class ScanTextEdit(QTextEdit):
 class ZoneListWidget(QListWidget):
     items_dropped_signal = pyqtSignal(str, list)
 
-    def __init__(self, zone_name, parent=None):
+    def __init__(self, zone_name, scale=1.0, watermark_text=None, parent=None):
         super().__init__(parent)
         self.zone_name = zone_name
+        self.scale = scale
+        # Gán text chìm theo biến truyền vào, nếu không có thì mặc định lấy zone_name hoặc "CHỜ XỬ LÝ"
+        self.watermark_text = watermark_text if watermark_text else (zone_name if zone_name else "CHỜ XỬ LÝ")
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDefaultDropAction(Qt.MoveAction)
         self.setMinimumHeight(0)
+
+    def paintEvent(self, event):
+        # 1. Vẽ danh sách các thẻ nhân sự (Items) TRƯỚC
+        super().paintEvent(event)
+
+        # 2. Vẽ Watermark chìm ĐÈ LÊN TRÊN các Items để không bao giờ bị che khuất
+        painter = QPainter(self.viewport())
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        font = QFont("Segoe UI", max(50, int(100 * self.scale)), QFont.Bold)
+        painter.setFont(font)
+
+        # Chữ mờ (độ mờ alpha 50/255 để đọc được chữ bên dưới mà không bị chói)
+        color = QColor(148, 163, 184, 50)
+        painter.setPen(color)
+
+        # Sử dụng watermark_text độc lập với zone_name
+        text = self.watermark_text
+        painter.drawText(self.viewport().rect(), Qt.AlignCenter | Qt.TextWordWrap, text)
+        painter.end()
 
     def dropEvent(self, event):
         source = event.source()
@@ -860,7 +883,6 @@ class ZoneListWidget(QListWidget):
 
                     prefix = "🔥 " if data.get("urgent") == "Y" else ""
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
-
                     taken_item.setData(Qt.UserRole, data)
 
                     self.insertItem(row, taken_item)
@@ -873,7 +895,6 @@ class ZoneListWidget(QListWidget):
 
 
 # --- MAIN WINDOW ---
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -938,10 +959,40 @@ class MainWindow(QMainWindow):
         input_vbox = QVBoxLayout()
         input_vbox.setSpacing(int(6 * self.scale))
 
+        # ---- TITLE VÀ SEARCH BAR ----
+        title_search_layout = QHBoxLayout()
         lbl_scan_title = QLabel("Cổng Nhập Dữ Liệu (Quét/Paste ID)")
         lbl_scan_title.setStyleSheet(
             f"font-weight: 600; font-size: {max(11, int(14 * self.scale))}px; color: #475569; border: none;")
-        input_vbox.addWidget(lbl_scan_title)
+
+        # Thanh tìm kiếm
+        self.txt_search = QLineEdit()
+        self.txt_search.setPlaceholderText("🔍 Tìm tên/ID...")
+        self.txt_search.setMinimumWidth(int(220 * self.scale))
+        self.txt_search.textChanged.connect(self.on_search_text_changed)
+
+        # Nhãn hiển thị số lượng kết quả
+        self.lbl_search_count = QLabel("")
+        self.lbl_search_count.setStyleSheet(
+            f"color: #64748B; font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; margin-left: 6px;")
+
+        title_search_layout.addWidget(lbl_scan_title)
+        title_search_layout.addStretch()
+        title_search_layout.addWidget(self.txt_search)
+        title_search_layout.addWidget(self.lbl_search_count)
+
+        input_vbox.addLayout(title_search_layout)
+
+        # Shortcut Ctrl+F focus vào ô tìm kiếm
+        shortcut_search = QShortcut(QKeySequence("Ctrl+F"), self)
+        shortcut_search.activated.connect(self.txt_search.selectAll)
+        shortcut_search.activated.connect(self.txt_search.setFocus)
+
+        # Shortcut Esc thoát tìm kiếm
+        shortcut_esc = QShortcut(QKeySequence("Esc"), self.txt_search)
+        shortcut_esc.activated.connect(self.txt_search.clear)
+        shortcut_esc.activated.connect(self.txt_search.clearFocus)
+        # -----------------------------
 
         self.txt_scan = ScanTextEdit()
         self.txt_scan.setPlaceholderText("Paste ID và Enter...")
@@ -984,12 +1035,17 @@ class MainWindow(QMainWindow):
         workspace_layout = QHBoxLayout()
         workspace_layout.setSpacing(pad_main)
 
+        # =========================================================================
+        # CHỈNH SỬA TIÊU ĐỀ (Title) VÀ CHỮ MỜ (Watermark) TẠI ĐÂY
+        # Tham số thứ 2 là Tiêu đề góc trên
+        # Tham số watermark_text="..." là Chữ chìm lơ lửng ở giữa
+        # =========================================================================
+
         left_panel_container = QWidget()
         left_layout = QVBoxLayout(left_panel_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        # Left panel accent color: Xám Slate hiện đại
         self.create_zone_box(left_layout, "Danh sách xử lý", "#64748B", 0, 0, is_grid=False, show_badge=True,
-                             is_left_panel=True)
+                             is_left_panel=True, watermark_text="<3")  # Tách biệt watermark
         workspace_layout.addWidget(left_panel_container, stretch=2)
 
         right_panel = QWidget()
@@ -1026,11 +1082,11 @@ class MainWindow(QMainWindow):
         normal_grid = QGridLayout()
         normal_grid.setSpacing(int(6 * self.scale))
 
-        # Đổi lại màu viền cho hợp tone Modern
-        self.create_zone_box(normal_grid, "Block A", "#10B981", 0, 0, True)  # Emerald
-        self.create_zone_box(normal_grid, "Block B", "#F59E0B", 0, 1, True)  # Amber
-        self.create_zone_box(normal_grid, "Block C", "#8B5CF6", 0, 2, True)  # Violet
-        self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 0, 3, True)  # Blue
+        # Ví dụ: Tiêu đề là "Block A", chữ chìm là "A"
+        self.create_zone_box(normal_grid, "Block A", "#10B981", 0, 0, True, watermark_text="A")
+        self.create_zone_box(normal_grid, "Block B", "#F59E0B", 0, 1, True, watermark_text="B")
+        self.create_zone_box(normal_grid, "Block C", "#8B5CF6", 0, 2, True, watermark_text="C")
+        self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 0, 3, True, watermark_text="A&B")
 
         # --- CONFIG CARD ---
         config_frame = QFrame()
@@ -1067,9 +1123,9 @@ class MainWindow(QMainWindow):
 
         normal_grid.addWidget(config_frame, 0, 4, 2, 1)
 
-        self.create_zone_box(normal_grid, "Block A&C", "#3B82F6", 1, 0, True)
-        self.create_zone_box(normal_grid, "Block B&C", "#3B82F6", 1, 1, True)
-        self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 2, True, colspan=2)  # Red
+        self.create_zone_box(normal_grid, "Block A&C", "#3B82F6", 1, 0, True, watermark_text="A&C")
+        self.create_zone_box(normal_grid, "Block B&C", "#3B82F6", 1, 1, True, watermark_text="B&C")
+        self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 2, True, colspan=2, watermark_text="A&B&C")
 
         normal_layout_main.addLayout(normal_grid)
         self.stacked_widget.addWidget(normal_container)
@@ -1082,29 +1138,101 @@ class MainWindow(QMainWindow):
         flow_grid = QGridLayout()
         flow_grid.setSpacing(int(6 * self.scale))
 
-        flow_color_a = "#06B6D4"  # Cyan
-        flow_color_b = "#F97316"  # Orange
-        flow_color_c = "#8B5CF6"  # Violet
+        flow_color_a = "#06B6D4"
+        flow_color_b = "#F97316"
+        flow_color_c = "#8B5CF6"
 
-        self.create_zone_box(flow_grid, "A1", flow_color_a, 0, 0, True)
-        self.create_zone_box(flow_grid, "A2", flow_color_a, 0, 1, True)
-        self.create_zone_box(flow_grid, "A3", flow_color_a, 0, 2, True)
-        self.create_zone_box(flow_grid, "A4", flow_color_a, 0, 3, True)
-        self.create_zone_box(flow_grid, "B1", flow_color_b, 0, 4, True)
-        self.create_zone_box(flow_grid, "B2", flow_color_b, 0, 5, True)
-        self.create_zone_box(flow_grid, "B3", flow_color_b, 1, 0, True)
-        self.create_zone_box(flow_grid, "FD", "#EF4444", 1, 1, True)  # Rose/Red cho FD
-        self.create_zone_box(flow_grid, "C1", flow_color_c, 1, 2, True)
-        self.create_zone_box(flow_grid, "C2", flow_color_c, 1, 3, True)
-        self.create_zone_box(flow_grid, "C3", flow_color_c, 1, 4, True, colspan=2)
+        # Ví dụ: Đổi watermark tuỳ ý
+        self.create_zone_box(flow_grid, "A1", flow_color_a, 0, 0, True, watermark_text="A1")
+        self.create_zone_box(flow_grid, "A2", flow_color_a, 0, 1, True, watermark_text="A2")
+        self.create_zone_box(flow_grid, "A3", flow_color_a, 0, 2, True, watermark_text="A3")
+        self.create_zone_box(flow_grid, "A4", flow_color_a, 0, 3, True, watermark_text="A4")
+        self.create_zone_box(flow_grid, "B1", flow_color_b, 0, 4, True, watermark_text="B1")
+        self.create_zone_box(flow_grid, "B2", flow_color_b, 0, 5, True, watermark_text="B2")
+        self.create_zone_box(flow_grid, "B3", flow_color_b, 1, 0, True, watermark_text="B3")
+        self.create_zone_box(flow_grid, "FD", "#EF4444", 1, 1, True, watermark_text="FD")
+        self.create_zone_box(flow_grid, "C1", flow_color_c, 1, 2, True, watermark_text="C1")
+        self.create_zone_box(flow_grid, "C2", flow_color_c, 1, 3, True, watermark_text="C2")
+        self.create_zone_box(flow_grid, "C3", flow_color_c, 1, 4, True, colspan=2, watermark_text="C3")
 
         flow_layout_main.addLayout(flow_grid)
         self.stacked_widget.addWidget(flow_container)
 
         right_layout.addWidget(self.stacked_widget, stretch=1)
-        workspace_layout.addWidget(right_panel, stretch=8)  # Cân chỉnh lại tỷ lệ 2/8 cho đẹp
+        workspace_layout.addWidget(right_panel, stretch=8)
 
         main_layout.addLayout(workspace_layout)
+
+    # --- TÍNH NĂNG TÌM KIẾM CẢI TIẾN ---
+    def on_search_text_changed(self, text):
+        # 1. Loại bỏ dấu và đưa về chữ thường
+        search_term = remove_accents(text.strip().lower())
+        match_count = 0
+
+        for lw in self.listboxes.values():
+            for i in range(lw.count()):
+                item = lw.item(i)
+                data = item.data(Qt.UserRole)
+                if not isinstance(data, dict):
+                    continue
+
+                name_raw = data.get("name", "")
+                wms_id = str(data.get("wms_id", ""))
+                user_id = str(data.get("user_id", ""))
+
+                # Loại bỏ dấu và đưa về chữ thường đối với data thực tế
+                name_search = remove_accents(name_raw.lower())
+                wms_id_search = wms_id.lower()
+                user_id_search = user_id.lower()
+
+                prefix = "🔥 " if data.get("urgent") == "Y" else ""
+                base_text = f'{prefix}{name_raw} - {wms_id}'
+
+                # 2. Xử lý Highlight (Bất chấp mọi override QSS)
+                if search_term and (
+                        search_term in name_search or search_term in wms_id_search or search_term in user_id_search):
+                    # Thêm icon ⭐ + đổi màu chữ + in đậm để nổi bật tối đa
+                    item.setText(f"⭐ {base_text}")
+                    item.setBackground(QColor("#FEF08A"))
+                    item.setForeground(QColor("#C2410C"))  # Màu Cam đậm/Đỏ gạch cực kỳ dễ nhìn
+
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
+
+                    match_count += 1
+                else:
+                    item.setText(base_text)
+                    item.setBackground(QColor("#F5F5F5"))
+
+                    # Trả lại màu chữ ban đầu (đen/xanh dương/hồng)
+                    saved_color = data.get("color", "#1E293B")
+                    item.setForeground(
+                        QColor("#1E293B" if saved_color in ["white", "#ffffff", "#2d3436", "black"] else saved_color))
+
+                    font = item.font()
+                    font.setBold(False)
+                    item.setFont(font)
+
+        # Cập nhật thông báo đếm số lượng khớp
+        if search_term:
+            if match_count > 0:
+                self.lbl_search_count.setText(f"({match_count} kết quả)")
+                self.lbl_search_count.setStyleSheet(
+                    f"color: #D97706; font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; margin-left: 6px;")
+            else:
+                self.lbl_search_count.setText("(0 kết quả)")
+                self.lbl_search_count.setStyleSheet(
+                    f"color: #EF4444; font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; margin-left: 6px;")
+        else:
+            self.lbl_search_count.setText("")
+
+    def trigger_search_update(self):
+        """Kích hoạt lại bộ lọc tìm kiếm để màu sắc item được thiết lập đúng đắn mỗi khi thay đổi danh sách"""
+        if hasattr(self, 'txt_search'):
+            self.on_search_text_changed(self.txt_search.text())
+
+    # --------------------------
 
     def switch_tab(self, index):
         self.stacked_widget.setCurrentIndex(index)
@@ -1121,12 +1249,10 @@ class MainWindow(QMainWindow):
         self.btn_tab_flow.style().polish(self.btn_tab_flow)
 
     def create_zone_box(self, parent_layout, title, top_border_color, row, col, is_grid=False, show_badge=True,
-                        colspan=1,
-                        is_left_panel=False):
+                        colspan=1, is_left_panel=False, watermark_text=None):
         box_frame = QFrame()
         box_frame.setObjectName("zone_box_frame")
 
-        # Thiết kế Card hiện đại: Viền mỏng, bo góc mềm, vạch màu nhấn ở trên cùng, Nền Hồng Pastel
         box_style = f"""
             #zone_box_frame {{
                 border: 1px solid #E2E8F0;
@@ -1151,7 +1277,8 @@ class MainWindow(QMainWindow):
         h_layout.addWidget(lbl_title)
         h_layout.addStretch()
 
-        lw_title = title if title != "Danh sách xử lý" else ""
+        # Đảm bảo ô bên trái luôn có key là "" trong listboxes dù bạn có đổi tên Title thành gì
+        lw_title = "" if is_left_panel else title
 
         if show_badge:
             right_vbox = QVBoxLayout()
@@ -1166,7 +1293,7 @@ class MainWindow(QMainWindow):
             self.badges[lw_title] = badge
 
             if lw_title in NORMAL_BLOCKS:
-                dyn_badge = QLabel("⚡ Wave: 0")
+                dyn_badge = QLabel("⚡Dynamic: 0")
                 dyn_badge.setStyleSheet(
                     f"background-color: #FFFFFF; color: #9333EA; font-weight: 600; border: 1px solid #E9D5FF; border-radius: 4px; padding: 2px 6px; font-size: {font_size_badge}px;")
                 right_vbox.addWidget(dyn_badge, alignment=Qt.AlignRight)
@@ -1176,7 +1303,8 @@ class MainWindow(QMainWindow):
 
         box_layout.addLayout(h_layout)
 
-        lw = ZoneListWidget(lw_title)
+        # Truyền watermark_text vào ZoneListWidget
+        lw = ZoneListWidget(lw_title, self.scale, watermark_text=watermark_text)
         lw.setStyleSheet("QListWidget { border: none; background-color: transparent; }")
         lw.items_dropped_signal.connect(self.on_items_dropped_to_zone)
         lw.itemDoubleClicked.connect(self.on_item_double_clicked)
@@ -1217,7 +1345,7 @@ class MainWindow(QMainWindow):
 
                     if title in self.dynamic_badges:
                         t_dyn = self.dynamic_task_counts.get(title, 0)
-                        self.dynamic_badges[title].setText(f"⚡ Wave: {t_dyn}")
+                        self.dynamic_badges[title].setText(f"⚡ Dynamic: {t_dyn}")
 
                 elif title in FLOW_ZONES:
                     t_flow_data = self.flow_task_counts.get(title, {"normal": 0, "urgent": 0})
@@ -1247,13 +1375,13 @@ class MainWindow(QMainWindow):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
         self.lbl_status.setText(f"✅ Sẵn sàng! Đã tải {len(self.cached_data)} nhân sự.")
-        self.lbl_status.setStyleSheet("color: #10B981;")  # Xanh success
+        self.lbl_status.setStyleSheet("color: #10B981;")
         self.refresh_all_data()
 
     @pyqtSlot(str)
     def on_init_error(self, err):
         self.lbl_status.setText(f"❌ Lỗi: {err}")
-        self.lbl_status.setStyleSheet("color: #EF4444;")  # Đỏ
+        self.lbl_status.setStyleSheet("color: #EF4444;")
 
     def on_scan_triggered(self, text):
         self.txt_scan.clear()
@@ -1281,13 +1409,14 @@ class MainWindow(QMainWindow):
                     break
 
         block_name = str(data.get("block", "")).strip()
-        target_lb = self.listboxes.get(block_name, self.listboxes[""])
+        # Dùng fallback an toàn tránh lỗi KeyError: ''
+        fallback_lb = self.listboxes.get("", list(self.listboxes.values())[0])
+        target_lb = self.listboxes.get(block_name, fallback_lb)
 
-        prefix = "🔥 " if data.get("urgent") == "Y" else ""
-        item = QListWidgetItem(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
-        item.setForeground(QColor(data.get("color", "#1E293B")))
-        item.setFlags(item.flags() | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled | Qt.ItemIsEnabled)
+        # Base text setup
+        item = QListWidgetItem("")
         item.setData(Qt.UserRole, data)
+        item.setFlags(item.flags() | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled | Qt.ItemIsEnabled)
 
         target_lb.addItem(item)
         target_lb.scrollToBottom()
@@ -1296,6 +1425,9 @@ class MainWindow(QMainWindow):
         self.lbl_status.setText(f"✅ Đã thêm {data['name']}")
         self.lbl_status.setStyleSheet("color: #10B981;")
         self.update_all_badges()
+
+        # Gọi cập nhật search để nó gán chữ, gán màu lại chuẩn nhất
+        self.trigger_search_update()
 
     @pyqtSlot(str, list)
     def on_items_dropped_to_zone(self, zone_name, dropped_data):
@@ -1306,6 +1438,7 @@ class MainWindow(QMainWindow):
         wms_thread = WMSUpdateRuleThread(zone_name, dropped_data, self.get_current_config(), self.wms_cookie)
         self.start_thread(wms_thread)
         self.update_all_badges()
+        self.trigger_search_update()
 
     @pyqtSlot(QListWidgetItem)
     def on_item_double_clicked(self, item):
@@ -1317,9 +1450,6 @@ class MainWindow(QMainWindow):
             return
 
         data["urgent"] = "Y" if data.get("urgent", "N") == "N" else "N"
-        prefix = "🔥 " if data["urgent"] == "Y" else ""
-        item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
-
         item.setData(Qt.UserRole, data)
 
         self.current_firebase_data[data["user_id"]] = data
@@ -1327,6 +1457,7 @@ class MainWindow(QMainWindow):
 
         wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
         self.start_thread(wms_thread)
+        self.trigger_search_update()
 
     def on_context_menu(self, pos, list_widget):
         item = list_widget.itemAt(pos)
@@ -1351,18 +1482,17 @@ class MainWindow(QMainWindow):
             data_to_reset["urgent"] = "N"
             wms_thread = WMSUpdateRuleThread("", [data_to_reset], self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
+            self.trigger_search_update()
 
         elif 'act_y' in locals() and action in [act_y, act_n]:
             data["urgent"] = "Y" if action == act_y else "N"
-            prefix = "🔥 " if data["urgent"] == "Y" else ""
-            item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
-
             item.setData(Qt.UserRole, data)
 
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
 
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
+            self.trigger_search_update()
 
     def delete_selected_items(self):
         deleted_pickers = []
@@ -1383,6 +1513,8 @@ class MainWindow(QMainWindow):
 
             wms_thread = WMSUpdateRuleThread("", deleted_pickers, self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
+
+        self.trigger_search_update()
 
     def refresh_all_data(self):
         self.lbl_status.setText("🔄 Đang đồng bộ dữ liệu Picker và Config...")
@@ -1456,13 +1588,11 @@ class MainWindow(QMainWindow):
                 self.current_firebase_data[str(k)] = v
 
                 block_name = str(v.get("block", "")).strip()
-                target_lb = self.listboxes.get(block_name, self.listboxes[""])
+                # Dùng fallback an toàn tránh lỗi KeyError: ''
+                fallback_lb = self.listboxes.get("", list(self.listboxes.values())[0])
+                target_lb = self.listboxes.get(block_name, fallback_lb)
 
-                prefix = "🔥 " if v.get("urgent") == "Y" else ""
-                item = QListWidgetItem(f'{prefix}{v.get("name", "N/A")} - {v.get("wms_id", "")}')
-                saved_color = v.get("color", "#1E293B")
-                item.setForeground(
-                    QColor("#1E293B" if saved_color in ["white", "#ffffff", "#2d3436", "black"] else saved_color))
+                item = QListWidgetItem("")
                 item.setFlags(item.flags() | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled | Qt.ItemIsEnabled)
                 item.setData(Qt.UserRole, v)
 
@@ -1473,6 +1603,7 @@ class MainWindow(QMainWindow):
         self.lbl_status.setStyleSheet("color: #10B981;")
 
         self.refresh_wms_tasks()
+        self.trigger_search_update()
 
     def toggle_config_edit(self):
         if self.btn_edit_config.text() == "Chỉnh sửa":
