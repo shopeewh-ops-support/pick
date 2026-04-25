@@ -43,9 +43,9 @@ DISPLAY_NAMES = {
     "B2": "Cứu Rỗi",
     "B3": "Cầu Nại Hà",
     "FD": "Hoa Bỉ Ngạn",
-    "C1": "Quỷ Môn Quan",
-    "C2": "Giác Ngộ",
-    "C3": "Cửu Tuyền",
+    "C1": "Vọng Hương Đài",
+    "C2": "Đình Mạnh Bà",
+    "C3": "Nam Thiên Môn",
     "E1": "Điện Máy Xanh"
     }
 
