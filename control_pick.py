@@ -46,8 +46,9 @@ DISPLAY_NAMES = {
     "C1": "Vọng Hương Đài",
     "C2": "Đình Mạnh Bà",
     "C3": "Nam Thiên Môn",
-    "E1": "Điện Máy Xanh"
-    }
+    "E1": "Điện Máy Xanh",
+    "TOP": "TopGia"
+}
 
 
 # --- HÀM LOẠI BỎ DẤU TIẾNG VIỆT ---
@@ -173,6 +174,16 @@ def get_dynamic_qss(scale):
         background-color: #FCE7F3; color: #BE185D;
     }}
 
+    QPushButton#sub_tab_active {{
+        background-color: {primary}; color: white; border: none; border-radius: 4px; font-size: {max(9, int(11 * scale))}px; padding: {pad_small}px {pad_med}px;
+    }}
+    QPushButton#sub_tab_inactive {{
+        background-color: transparent; color: {text_sub}; border: 1px solid transparent; border-radius: 4px; font-size: {max(9, int(11 * scale))}px; padding: {pad_small}px {pad_med}px;
+    }}
+    QPushButton#sub_tab_inactive:hover {{
+        background-color: #FCE7F3; color: #BE185D;
+    }}
+
     QPushButton#btn_delete {{
         background-color: #FEF2F2; color: {danger}; border: 1px solid #FECACA;
     }}
@@ -190,8 +201,7 @@ def get_dynamic_qss(scale):
 
 
 # --- CONSTANTS ---
-FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "FD", "C1", "C2", "C3", "E1"]
-# Cập nhật mảng để có Block E
+FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "FD", "C1", "C2", "C3", "E1", "TOP"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block E", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
@@ -387,9 +397,8 @@ class FetchTasksThread(QThread):
                 has_a = bool(t_zones & cfg_a)
                 has_b = bool(t_zones & cfg_b)
                 has_c = bool(t_zones & cfg_c)
-                has_e = bool(t_zones & cfg_e)  # Block E
+                has_e = bool(t_zones & cfg_e)
 
-                # Giữ nguyên luồng kết hợp (không tạo A&E trừ khi bạn yêu cầu sau này)
                 if has_a and has_b and has_c:
                     counts["Block A&B&C"][task_type] += 1
                 elif has_a and has_b:
@@ -476,7 +485,7 @@ class FetchDynamicTasksThread(QThread):
                     has_a = bool(t_zones & cfg_a)
                     has_b = bool(t_zones & cfg_b)
                     has_c = bool(t_zones & cfg_c)
-                    has_e = bool(t_zones & cfg_e)  # Block E
+                    has_e = bool(t_zones & cfg_e)
 
                     if has_a and has_b and has_c:
                         counts["Block A&B&C"].add(pickup_id)
@@ -1037,7 +1046,7 @@ class MainWindow(QMainWindow):
         # --- STACKED WIDGET ---
         self.stacked_widget = QStackedWidget()
 
-        # 1. NORMAL PICK - Tái cấu trúc Layout lại cho đều đặn
+        # 1. NORMAL PICK
         normal_container = QWidget()
         normal_layout_main = QVBoxLayout(normal_container)
         normal_layout_main.setContentsMargins(0, 0, 0, 0)
@@ -1068,7 +1077,7 @@ class MainWindow(QMainWindow):
         self.txt_cfg_a = QLineEdit()
         self.txt_cfg_b = QLineEdit()
         self.txt_cfg_c = QLineEdit()
-        self.txt_cfg_e = QLineEdit()  # <--- Thêm text box cho Config E
+        self.txt_cfg_e = QLineEdit()
 
         font_size_cfg = max(9, int(11 * self.scale))
 
@@ -1083,12 +1092,11 @@ class MainWindow(QMainWindow):
         self.btn_edit_config = QPushButton("Chỉnh sửa")
         self.btn_edit_config.setStyleSheet("margin-top: 4px;")
         self.btn_edit_config.clicked.connect(self.toggle_config_edit)
-        config_layout.addWidget(self.btn_edit_config, 5, 0, 1, 2)  # Dịch xuống row 5
+        config_layout.addWidget(self.btn_edit_config, 5, 0, 1, 2)
 
-        normal_grid.addWidget(config_frame, 0, 4, 2, 1)  # Config chiếm cột 4, span 2 row
+        normal_grid.addWidget(config_frame, 0, 4, 2, 1)
 
         # Row 1: Các Block Kết hợp
-
         self.create_zone_box(normal_grid, "Block A&C", "#3B82F6", 1, 0, True, watermark_text="AC")
         self.create_zone_box(normal_grid, "Block B&C", "#3B82F6", 1, 1, True, watermark_text="BC")
         self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 2, True, watermark_text="ABC")
@@ -1120,7 +1128,50 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "C1", flow_color_c, 1, 2, True, watermark_text="C1")
         self.create_zone_box(flow_grid, "C2", flow_color_c, 1, 3, True, watermark_text="C2")
         self.create_zone_box(flow_grid, "C3", flow_color_c, 1, 4, True, watermark_text="C3")
-        self.create_zone_box(flow_grid, "E1", flow_color_c, 1, 5, True, watermark_text="E1")
+
+        # --- SUB-TAB FOR E1 & TOP ---
+        sub_tab_container = QWidget()
+        sub_tab_layout = QVBoxLayout(sub_tab_container)
+        sub_tab_layout.setContentsMargins(0, 0, 0, 0)
+        sub_tab_layout.setSpacing(2)
+
+        sub_tab_btns_layout = QHBoxLayout()
+        sub_tab_btns_layout.setSpacing(2)
+
+        self.btn_sub_e1 = QPushButton("Điện Máy Xanh")
+        self.btn_sub_top = QPushButton("TopGia")
+
+        self.btn_sub_e1.setObjectName("sub_tab_active")
+        self.btn_sub_top.setObjectName("sub_tab_inactive")
+
+        self.btn_sub_e1.clicked.connect(lambda: self.switch_sub_tab(0))
+        self.btn_sub_top.clicked.connect(lambda: self.switch_sub_tab(1))
+
+        sub_tab_btns_layout.addWidget(self.btn_sub_e1)
+        sub_tab_btns_layout.addWidget(self.btn_sub_top)
+
+        sub_tab_layout.addLayout(sub_tab_btns_layout)
+
+        self.sub_stacked_widget = QStackedWidget()
+
+        e1_page = QWidget()
+        e1_layout = QVBoxLayout(e1_page)
+        e1_layout.setContentsMargins(0, 0, 0, 0)
+        self.create_zone_box(e1_layout, "E1", flow_color_c, 0, 0, is_grid=False, is_left_panel=False,
+                             watermark_text="E1")
+
+        top_page = QWidget()
+        top_layout = QVBoxLayout(top_page)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        self.create_zone_box(top_layout, "TOP", flow_color_c, 0, 0, is_grid=False, is_left_panel=False,
+                             watermark_text="TOP")
+
+        self.sub_stacked_widget.addWidget(e1_page)
+        self.sub_stacked_widget.addWidget(top_page)
+
+        sub_tab_layout.addWidget(self.sub_stacked_widget)
+
+        flow_grid.addWidget(sub_tab_container, 1, 5)
 
         flow_layout_main.addLayout(flow_grid)
         self.stacked_widget.addWidget(flow_container)
@@ -1208,6 +1259,20 @@ class MainWindow(QMainWindow):
         self.btn_tab_flow.style().unpolish(self.btn_tab_flow)
         self.btn_tab_flow.style().polish(self.btn_tab_flow)
 
+    def switch_sub_tab(self, index):
+        self.sub_stacked_widget.setCurrentIndex(index)
+        if index == 0:
+            self.btn_sub_e1.setObjectName("sub_tab_active")
+            self.btn_sub_top.setObjectName("sub_tab_inactive")
+        else:
+            self.btn_sub_e1.setObjectName("sub_tab_inactive")
+            self.btn_sub_top.setObjectName("sub_tab_active")
+
+        self.btn_sub_e1.style().unpolish(self.btn_sub_e1)
+        self.btn_sub_e1.style().polish(self.btn_sub_e1)
+        self.btn_sub_top.style().unpolish(self.btn_sub_top)
+        self.btn_sub_top.style().polish(self.btn_sub_top)
+
     def create_zone_box(self, parent_layout, zone_id, top_border_color, row, col, is_grid=False, show_badge=True,
                         colspan=1, is_left_panel=False, watermark_text=None):
         box_frame = QFrame()
@@ -1278,6 +1343,8 @@ class MainWindow(QMainWindow):
             parent_layout.addWidget(box_frame)
         elif is_grid:
             parent_layout.addWidget(box_frame, row, col, 1, colspan)
+        else:
+            parent_layout.addWidget(box_frame)  # Fallback để đẩy vào các layout thẳng hàng (stacked widget)
 
         self.listboxes[lw_id] = lw
 
@@ -1523,7 +1590,7 @@ class MainWindow(QMainWindow):
             self.txt_cfg_a.setText(config_dict.get("Block A", ""))
             self.txt_cfg_b.setText(config_dict.get("Block B", ""))
             self.txt_cfg_c.setText(config_dict.get("Block C", ""))
-            self.txt_cfg_e.setText(config_dict.get("Block E", ""))  # <--- Gán giá trị E
+            self.txt_cfg_e.setText(config_dict.get("Block E", ""))
 
         if pickers_dict is None:
             self.lbl_status.setText("❌ Lỗi đồng bộ Firebase!")
@@ -1574,7 +1641,7 @@ class MainWindow(QMainWindow):
             self.txt_cfg_a.setReadOnly(False)
             self.txt_cfg_b.setReadOnly(False)
             self.txt_cfg_c.setReadOnly(False)
-            self.txt_cfg_e.setReadOnly(False)  # Cho sửa E
+            self.txt_cfg_e.setReadOnly(False)
         else:
             self.btn_edit_config.setText("Chỉnh sửa")
             self.btn_edit_config.setObjectName("")
@@ -1584,7 +1651,7 @@ class MainWindow(QMainWindow):
             self.txt_cfg_a.setReadOnly(True)
             self.txt_cfg_b.setReadOnly(True)
             self.txt_cfg_c.setReadOnly(True)
-            self.txt_cfg_e.setReadOnly(True)  # Khóa E
+            self.txt_cfg_e.setReadOnly(True)
 
             config_data = self.get_current_config()
             self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
