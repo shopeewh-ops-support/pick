@@ -7,6 +7,7 @@ import re
 import urllib.parse
 import datetime
 import unicodedata
+import concurrent.futures
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QProgressBar, QTextEdit,
                              QPushButton, QListWidget, QAbstractItemView,
@@ -302,13 +303,19 @@ class WMSUpdateRuleThread(QThread):
             elif is_flow:
                 payload["zone_id_list"] = ["SA4"]
                 payload["flow_pick_working_zone_list"] = [self.target_zone]
-                payload["channel_id_list"] = ["50033", "50051", "50044"] if is_urg else ["50011", "50021", "50032"]
-                payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0107"] if is_urg else ["VNVLFPOG0053"]
+                # Bỏ Hỏa tốc ở Flow Pick -> Luôn dùng channel id của đơn thường
+                payload["channel_id_list"] = ["50011", "50021", "50032"]
+
+                # Logic mới cho E1 và TOP dùng nhóm VNVLFPOG0117
+                if self.target_zone in ["TOP", "E1"]:
+                    payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0117"]
+                else:
+                    payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0053"]
             else:
                 payload["zone_id_list"] = list(normal_zones) if normal_zones else ["SA4"]
                 payload["flow_pick_working_zone_list"] = ["SA4"]
                 payload["channel_id_list"] = ["50033", "50051", "50044"] if is_urg else ["50011", "50021", "50032"]
-                payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0053", "VNVLFPOG0107"]
+                payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0107"] if is_urg else ["VNVLFPOG0053"]
 
             try:
                 requests.post(url, json=payload, headers=headers, timeout=10)
@@ -557,8 +564,11 @@ class FetchFlowTasksThread(QThread):
             except Exception as e:
                 pass
 
-        fetch_group("VNVLFPOG0053", "normal")
-        fetch_group("VNVLFPOG0107", "urgent")
+        # Call song song 2 API cho 2 group id khác nhau
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            f1 = executor.submit(fetch_group, "VNVLFPOG0053", "normal")  # Cho các khu bình thường
+            f2 = executor.submit(fetch_group, "VNVLFPOG0117", "normal")  # Mới thêm cho E1 và TOP
+            concurrent.futures.wait([f1, f2])
 
         self.tasks_fetched.emit(flow_counts)
 
@@ -859,9 +869,10 @@ class ZoneListWidget(QListWidget):
             if taken_item:
                 data = taken_item.data(Qt.UserRole)
                 if isinstance(data, dict):
-                    data["block"] = self.zone_id  # LƯU BẰNG ID GỐC ĐỂ KHÔNG BỊ LỖI KHI ĐỔI TÊN
+                    data["block"] = self.zone_id
 
-                    if self.zone_id == "":
+                    # Nếu rơi vào vùng Cõi Tạm hoặc các vùng Flow Pick thì tắt tính năng Hỏa Tốc
+                    if self.zone_id == "" or self.zone_id in FLOW_ZONES:
                         data["urgent"] = "N"
 
                     prefix = "🔥 " if data.get("urgent") == "Y" else ""
@@ -1060,7 +1071,7 @@ class MainWindow(QMainWindow):
         self.create_zone_box(normal_grid, "Block C", "#8B5CF6", 0, 2, True, watermark_text="C")
         self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 0, 3, True, watermark_text="AB")
 
-        # --- CONFIG CARD --- (Đẩy sang cột thứ 4, span 2 dòng)
+        # --- CONFIG CARD ---
         config_frame = QFrame()
         config_frame.setStyleSheet(
             "QFrame { border: 1px solid #E2E8F0; border-top: 4px solid #475569; border-radius: 8px; background-color: #F5F5F5; }")
@@ -1344,7 +1355,7 @@ class MainWindow(QMainWindow):
         elif is_grid:
             parent_layout.addWidget(box_frame, row, col, 1, colspan)
         else:
-            parent_layout.addWidget(box_frame)  # Fallback để đẩy vào các layout thẳng hàng (stacked widget)
+            parent_layout.addWidget(box_frame)
 
         self.listboxes[lw_id] = lw
 
@@ -1381,7 +1392,7 @@ class MainWindow(QMainWindow):
                     if isinstance(t_flow_data, int): t_flow_data = {"normal": t_flow_data, "urgent": 0}
 
                     t_norm = t_flow_data.get("normal", 0)
-                    t_urg = t_flow_data.get("urgent", 0)
+                    t_urg = t_flow_data.get("urgent", 0)  # Sẽ luôn là 0 vì đã bỏ fetch Hỏa Tốc ở Flow
 
                     self.badges[z_id].setText(f"👤 {people_count} | 📦 {t_norm} | 🔥 {t_urg}")
                 else:
@@ -1475,6 +1486,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Cảnh báo", "Không thể gán Hỏa Tốc trong Cõi Tạm!")
             return
 
+        if data.get("block") in FLOW_ZONES:
+            QMessageBox.warning(self, "Cảnh báo", "Flow Pick không hỗ trợ tính năng gán đơn Hỏa Tốc!")
+            return
+
         data["urgent"] = "Y" if data.get("urgent", "N") == "N" else "N"
         item.setData(Qt.UserRole, data)
 
@@ -1491,8 +1506,13 @@ class MainWindow(QMainWindow):
         data = item.data(Qt.UserRole)
         menu = QMenu(self)
 
+        act_y = None
+        act_n = None
+
         if data.get("block"):
-            act_y = menu.addAction("🔥 Gán Đơn Hỏa Tốc")
+            # Vùng Flow Pick sẽ không có nút Hỏa Tốc
+            if data.get("block") not in FLOW_ZONES:
+                act_y = menu.addAction("🔥 Gán Đơn Hỏa Tốc")
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
             menu.addSeparator()
 
@@ -1510,12 +1530,18 @@ class MainWindow(QMainWindow):
             self.start_thread(wms_thread)
             self.trigger_search_update()
 
-        elif 'act_y' in locals() and action in [act_y, act_n]:
-            data["urgent"] = "Y" if action == act_y else "N"
+        elif act_y and action == act_y:
+            data["urgent"] = "Y"
             item.setData(Qt.UserRole, data)
-
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
+            self.trigger_search_update()
 
+        elif act_n and action == act_n:
+            data["urgent"] = "N"
+            item.setData(Qt.UserRole, data)
+            self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
             self.trigger_search_update()
