@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QPushButton, QListWidget, QAbstractItemView,
                              QListWidgetItem, QMessageBox, QGridLayout, QFrame, QMenu, QLineEdit, QSizePolicy,
                              QStackedWidget, QShortcut)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QRunnable, QThreadPool, pyqtSlot
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QRunnable, QThreadPool, pyqtSlot, QRect
 from PyQt5.QtGui import QFont, QColor, QKeySequence, QPainter
 
 import gspread
@@ -21,11 +21,8 @@ from google.oauth2.service_account import Credentials
 
 # =========================================================================
 # TỪ ĐIỂN ĐỔI TÊN HIỂN THỊ (DISPLAY NAMES)
-# CÁCH DÙNG: Chỉ thay đổi chuỗi ở phía sau dấu hai chấm (bên phải).
-# Tuyệt đối KHÔNG thay đổi chuỗi phía trước (bên trái) vì đó là ID hệ thống.
 # =========================================================================
 DISPLAY_NAMES = {
-    # --- NORMAL PICK ---
     "Block A": "Thiên Đàng",
     "Block B": "Trần Gian",
     "Block C": "Dương Thế",
@@ -34,8 +31,6 @@ DISPLAY_NAMES = {
     "Block A&C": "Âm Phủ",
     "Block B&C": "Cõi Âm",
     "Block A&B&C": "Địa Ngục",
-
-    # --- FLOW PICK ---
     "A1": "Nhân Quả",
     "A2": "Nghiệp Chướng",
     "A3": "Tiền Kiếp",
@@ -49,6 +44,18 @@ DISPLAY_NAMES = {
     "C3": "Nam Thiên Môn",
     "E1": "Điện Máy Xanh",
     "TOP": "TopGia"
+}
+
+# =========================================================================
+# WAVE RULE GROUPS
+# =========================================================================
+WAVE_RULE_GROUPS = {
+    "NDD": ["VNVLDWR0025", "VNVLDWR0026", "VNVLDWR0022", "VNVLDWR0023", "VNVLDWR0020", "VNVLDWR0024", "VNVLDWR0028",
+            "VNVLDWR0029", "VNVLDWR0030"],
+    "After-NDD": ["VNVLDWR0032", "VNVLDWR0033", "VNVLDWR0034", "VNVLDWR0035", "VNVLDWR0036", "VNVLDWR0037", "VNVLDWR0038",
+             "VNVLDWR0039", "VNVLDWR0040"],
+    "D-1": ["VNVLDWR0041", "VNVLDWR0042", "VNVLDWR0043", "VNVLDWR0044", "VNVLDWR0045", "VNVLDWR0046", "VNVLDWR0047",
+            "VNVLDWR0048", "VNVLDWR0049"]
 }
 
 
@@ -221,7 +228,91 @@ def log_uncaught_exceptions(ex_cls, ex, tb):
 sys.excepthook = log_uncaught_exceptions
 
 
+# --- CUSTOM WIDGETS ---
+class ToggleSwitch(QPushButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setMinimumSize(44, 24)
+        self.setMaximumSize(44, 24)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+
+        rect = QRect(0, 0, self.width(), self.height())
+        # Vẽ nền
+        if self.isChecked():
+            painter.setBrush(QColor("#4ADE80"))  # Xanh lá giống ảnh
+        else:
+            painter.setBrush(QColor("#E2E8F0"))  # Xám
+
+        painter.drawRoundedRect(0, 0, rect.width(), rect.height(), 12, 12)
+
+        # Vẽ hình tròn
+        painter.setBrush(QColor("#FFFFFF"))
+        if self.isChecked():
+            painter.drawEllipse(self.width() - 22, 2, 20, 20)
+        else:
+            painter.drawEllipse(2, 2, 20, 20)
+        painter.end()
+
+
 # --- WORKERS ---
+class WMSUpdateWaveRuleThread(QThread):
+    finished_update = pyqtSignal(int, int)  # Thêm signal báo cáo (success_count, total_count)
+
+    def __init__(self, wms_cookie, rules_to_update):
+        super().__init__()
+        self.wms_cookie = wms_cookie
+        self.rules_to_update = rules_to_update  # Dict: {"rule_id": status_int}
+
+    def run(self):
+        if not self.wms_cookie or not self.rules_to_update:
+            self.finished_update.emit(0, 0)
+            return
+
+        headers = {
+            "Sec-CH-UA": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
+            "Sec-CH-UA-Mobile": "?0",
+            "Sec-CH-UA-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Content-Type": "application/json",
+            "Cookie": self.wms_cookie
+        }
+        url = "https://wms.ssc.shopee.vn/api/v2/apps/config/waverule/set_dynamic_wave_rule_switch"
+
+        success_count = 0
+        total_count = len(self.rules_to_update)
+
+        def send_req(rule_id, status):
+            nonlocal success_count
+            payload = {
+                "rule_id": rule_id,
+                "switch_status": status
+            }
+            try:
+                res = requests.post(url, json=payload, headers=headers, timeout=10)
+                if res.status_code == 200:
+                    data = res.json()
+                    if data.get("retcode") == 0 and data.get("message") == "success":
+                        success_count += 1
+            except Exception as e:
+                print(f"[WMS Wave Rule] Lỗi API Request ({rule_id}): {e}")
+
+        # Bắn API đa luồng song song (Max 18 luồng nếu vừa bật 1 vừa tắt 1)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.rules_to_update)) as executor:
+            futures = [executor.submit(send_req, rule_id, status) for rule_id, status in self.rules_to_update.items()]
+            concurrent.futures.wait(futures)
+
+        self.finished_update.emit(success_count, total_count)
+
+
 class WMSUpdateRuleThread(QThread):
     def __init__(self, target_zone, picker_list, config_data, wms_cookie):
         super().__init__()
@@ -908,6 +999,13 @@ class MainWindow(QMainWindow):
         self.badges = {}
         self.dynamic_badges = {}
 
+        # Lưu trữ trạng thái bộ nút toggle
+        self.current_toggle_states = {
+            "NDD": False,
+            "After-NDD": False,
+            "D-1": False
+        }
+
         self.init_ui()
         self.setWindowState(Qt.WindowMaximized)
         self.start_initialization()
@@ -926,7 +1024,10 @@ class MainWindow(QMainWindow):
             "Block A": self.txt_cfg_a.text().strip(),
             "Block B": self.txt_cfg_b.text().strip(),
             "Block C": self.txt_cfg_c.text().strip(),
-            "Block E": self.txt_cfg_e.text().strip()
+            "Block E": self.txt_cfg_e.text().strip(),
+            "NDD": self.toggle_ndd.isChecked(),
+            "After-NDD": self.toggle_andd.isChecked(),
+            "D-1": self.toggle_d1.isChecked()
         }
 
     def init_ui(self):
@@ -1100,10 +1201,31 @@ class MainWindow(QMainWindow):
             config_layout.addWidget(lbl, idx + 1, 0)
             config_layout.addWidget(txt_widget, idx + 1, 1)
 
+        # --- Thêm Toggle Switches ---
+        lbl_dynamic_title = QLabel("⚡ Dynamic Wave Config")
+        lbl_dynamic_title.setStyleSheet(
+            f"font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; color: #9333EA; border: none; margin-top: 4px;")
+        config_layout.addWidget(lbl_dynamic_title, 5, 0, 1, 2)
+
+        self.toggle_ndd = ToggleSwitch()
+        self.toggle_andd = ToggleSwitch()
+        self.toggle_d1 = ToggleSwitch()
+
+        self.toggle_ndd.clicked.connect(lambda: self.on_toggle_changed("NDD"))
+        self.toggle_andd.clicked.connect(lambda: self.on_toggle_changed("After-NDD"))
+        self.toggle_d1.clicked.connect(lambda: self.on_toggle_changed("D-1"))
+
+        for idx, (lbl_text, toggle_widget) in enumerate(
+                [("NDD:", self.toggle_ndd), ("After-NDD:", self.toggle_andd), ("D-1:", self.toggle_d1)]):
+            lbl = QLabel(lbl_text)
+            lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
+            config_layout.addWidget(lbl, 6 + idx, 0)
+            config_layout.addWidget(toggle_widget, 6 + idx, 1)
+
         self.btn_edit_config = QPushButton("Chỉnh sửa")
-        self.btn_edit_config.setStyleSheet("margin-top: 4px;")
+        self.btn_edit_config.setStyleSheet("margin-top: 8px;")
         self.btn_edit_config.clicked.connect(self.toggle_config_edit)
-        config_layout.addWidget(self.btn_edit_config, 5, 0, 1, 2)
+        config_layout.addWidget(self.btn_edit_config, 9, 0, 1, 2)
 
         normal_grid.addWidget(config_frame, 0, 4, 2, 1)
 
@@ -1255,6 +1377,66 @@ class MainWindow(QMainWindow):
             self.on_search_text_changed(self.txt_search.text())
 
     # --------------------------
+
+    # --- LOGIC TOGGLE CÔNG TẮC ĐỘC QUYỀN ---
+    def on_toggle_changed(self, changed_toggle_name):
+        new_states = {
+            "NDD": self.toggle_ndd.isChecked(),
+            "After-NDD": self.toggle_andd.isChecked(),
+            "D-1": self.toggle_d1.isChecked()
+        }
+
+        # Đảm bảo tính độc quyền: Bật 1 nút thì 2 nút kia phải TẮT
+        if new_states[changed_toggle_name] is True:
+            for k in new_states:
+                if k != changed_toggle_name:
+                    new_states[k] = False
+
+        # Chặn Signal UI để set lại giao diện mà không gọi loop đệ quy
+        self.toggle_ndd.blockSignals(True)
+        self.toggle_andd.blockSignals(True)
+        self.toggle_d1.blockSignals(True)
+
+        self.toggle_ndd.setChecked(new_states["NDD"])
+        self.toggle_andd.setChecked(new_states["After-NDD"])
+        self.toggle_d1.setChecked(new_states["D-1"])
+
+        self.toggle_ndd.blockSignals(False)
+        self.toggle_andd.blockSignals(False)
+        self.toggle_d1.blockSignals(False)
+
+        # Tính toán Rule ID nào cần call API theo State MỚI so với State CŨ
+        rules_to_update = {}
+        for k, v in new_states.items():
+            if v != self.current_toggle_states[k]:
+                # Nghĩa là trạng thái đã bị đổi (Tắt -> Bật hoặc Bật -> Tắt)
+                status_int = 1 if v else 0
+                for rule_id in WAVE_RULE_GROUPS[k]:
+                    rules_to_update[rule_id] = status_int
+
+        # Cập nhật state cũ
+        self.current_toggle_states = new_states.copy()
+
+        # Update Firebase Config
+        config_data = self.get_current_config()
+        self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
+
+        # Khởi chạy luồng bắn API song song
+        if rules_to_update:
+            api_thread = WMSUpdateWaveRuleThread(self.wms_cookie, rules_to_update)
+            api_thread.finished_update.connect(self.on_wave_rules_updated)
+            self.start_thread(api_thread)
+            self.lbl_status.setText(f"⚡ Đang cấu hình {len(rules_to_update)} Wave Rules song song...")
+            self.lbl_status.setStyleSheet("color: #9333EA;")
+
+    @pyqtSlot(int, int)
+    def on_wave_rules_updated(self, success_count, total_count):
+        if success_count == total_count:
+            self.lbl_status.setText(f"✅ Đã cấu hình xong {success_count}/{total_count} Wave Rules!")
+            self.lbl_status.setStyleSheet("color: #10B981;")
+        else:
+            self.lbl_status.setText(f"⚠️ Đã cấu hình {success_count}/{total_count} Wave Rules. Có lỗi xảy ra!")
+            self.lbl_status.setStyleSheet("color: #F59E0B;")
 
     def switch_tab(self, index):
         self.stacked_widget.setCurrentIndex(index)
@@ -1612,11 +1794,36 @@ class MainWindow(QMainWindow):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
 
+        # Hàm giúp ép kiểu an toàn ra Boolean kể cả khi Firebase lưu nhầm thành String 'true'/'false'
+        def _parse_bool(val):
+            if isinstance(val, bool): return val
+            if isinstance(val, str): return val.lower() == 'true'
+            return bool(val)
+
         if config_dict is not None:
             self.txt_cfg_a.setText(config_dict.get("Block A", ""))
             self.txt_cfg_b.setText(config_dict.get("Block B", ""))
             self.txt_cfg_c.setText(config_dict.get("Block C", ""))
             self.txt_cfg_e.setText(config_dict.get("Block E", ""))
+
+            # Sync lại công tắc, chặn event không cho gọi API lúc load để tránh spam API
+            self.toggle_ndd.blockSignals(True)
+            self.toggle_andd.blockSignals(True)
+            self.toggle_d1.blockSignals(True)
+
+            is_ndd = _parse_bool(config_dict.get("NDD", False))
+            is_andd = _parse_bool(config_dict.get("After-NDD", False))
+            is_d1 = _parse_bool(config_dict.get("D-1", False))
+
+            self.toggle_ndd.setChecked(is_ndd)
+            self.toggle_andd.setChecked(is_andd)
+            self.toggle_d1.setChecked(is_d1)
+
+            self.current_toggle_states = {"NDD": is_ndd, "After-NDD": is_andd, "D-1": is_d1}
+
+            self.toggle_ndd.blockSignals(False)
+            self.toggle_andd.blockSignals(False)
+            self.toggle_d1.blockSignals(False)
 
         if pickers_dict is None:
             self.lbl_status.setText("❌ Lỗi đồng bộ Firebase!")
