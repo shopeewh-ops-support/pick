@@ -23,27 +23,28 @@ from google.oauth2.service_account import Credentials
 # TỪ ĐIỂN ĐỔI TÊN HIỂN THỊ (DISPLAY NAMES)
 # =========================================================================
 DISPLAY_NAMES = {
-    "Block A": "Thiên Đàng",
-    "Block B": "Trần Gian",
-    "Block C": "Dương Thế",
-    "Block E": "Điện Máy Xanh",
-    "Block A&B": "Hư Không",
-    "Block A&C": "Âm Phủ",
-    "Block B&C": "Cõi Âm",
-    "Block A&B&C": "Địa Ngục",
-    "A1": "Nhân Quả",
-    "A2": "Nghiệp Chướng",
-    "A3": "Tiền Kiếp",
-    "A4": "Siêu Thoát",
-    "B1": "Đọa Đầy",
-    "B2": "Cứu Rỗi",
-    "B3": "Cầu Nại Hà",
-    "FD": "Hoa Bỉ Ngạn",
-    "C1": "Vọng Hương Đài",
-    "C2": "Đình Mạnh Bà",
-    "C3": "Nam Thiên Môn",
-    "E1": "Điện Máy Xanh",
-    "TOP": "TopGia"
+    "Block A": "A",
+    "Block B": "B",
+    "Block C": "C",
+    "Block E": "E",
+    "Block A&B": "AB",
+    "Block A&C": "AC",
+    "Block B&C": "BC",
+    "Block A&B&C": "ABC",
+    "A1": "A1",
+    "A2": "A2",
+    "A3": "A3",
+    "A4": "A4",
+    "B1": "B1",
+    "B2": "B2",
+    "B3": "B3",
+    "FD": "FD",
+    "C1": "C1",
+    "C2": "C2",
+    "C3": "C3",
+    "E1": "E1",
+    "E2": "E2",
+    "TOP": "TOP"
 }
 
 # =========================================================================
@@ -52,8 +53,9 @@ DISPLAY_NAMES = {
 WAVE_RULE_GROUPS = {
     "NDD": ["VNVLDWR0025", "VNVLDWR0026", "VNVLDWR0022", "VNVLDWR0023", "VNVLDWR0020", "VNVLDWR0024", "VNVLDWR0028",
             "VNVLDWR0029", "VNVLDWR0030"],
-    "After-NDD": ["VNVLDWR0032", "VNVLDWR0033", "VNVLDWR0034", "VNVLDWR0035", "VNVLDWR0036", "VNVLDWR0037", "VNVLDWR0038",
-             "VNVLDWR0039", "VNVLDWR0040"],
+    "After-NDD": ["VNVLDWR0032", "VNVLDWR0033", "VNVLDWR0034", "VNVLDWR0035", "VNVLDWR0036", "VNVLDWR0037",
+                  "VNVLDWR0038",
+                  "VNVLDWR0039", "VNVLDWR0040"],
     "D-1": ["VNVLDWR0041", "VNVLDWR0042", "VNVLDWR0043", "VNVLDWR0044", "VNVLDWR0045", "VNVLDWR0046", "VNVLDWR0047",
             "VNVLDWR0048", "VNVLDWR0049"]
 }
@@ -182,16 +184,6 @@ def get_dynamic_qss(scale):
         background-color: #FCE7F3; color: #BE185D;
     }}
 
-    QPushButton#sub_tab_active {{
-        background-color: {primary}; color: white; border: none; border-radius: 4px; font-size: {max(9, int(11 * scale))}px; padding: {pad_small}px {pad_med}px;
-    }}
-    QPushButton#sub_tab_inactive {{
-        background-color: transparent; color: {text_sub}; border: 1px solid transparent; border-radius: 4px; font-size: {max(9, int(11 * scale))}px; padding: {pad_small}px {pad_med}px;
-    }}
-    QPushButton#sub_tab_inactive:hover {{
-        background-color: #FCE7F3; color: #BE185D;
-    }}
-
     QPushButton#btn_delete {{
         background-color: #FEF2F2; color: {danger}; border: 1px solid #FECACA;
     }}
@@ -209,7 +201,7 @@ def get_dynamic_qss(scale):
 
 
 # --- CONSTANTS ---
-FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "FD", "C1", "C2", "C3", "E1", "TOP"]
+FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "FD", "C1", "C2", "C3", "E1", "E2", "TOP"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block E", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
@@ -262,12 +254,12 @@ class ToggleSwitch(QPushButton):
 
 # --- WORKERS ---
 class WMSUpdateWaveRuleThread(QThread):
-    finished_update = pyqtSignal(int, int)  # Thêm signal báo cáo (success_count, total_count)
+    finished_update = pyqtSignal(int, int)
 
     def __init__(self, wms_cookie, rules_to_update):
         super().__init__()
         self.wms_cookie = wms_cookie
-        self.rules_to_update = rules_to_update  # Dict: {"rule_id": status_int}
+        self.rules_to_update = rules_to_update
 
     def run(self):
         if not self.wms_cookie or not self.rules_to_update:
@@ -305,7 +297,7 @@ class WMSUpdateWaveRuleThread(QThread):
             except Exception as e:
                 print(f"[WMS Wave Rule] Lỗi API Request ({rule_id}): {e}")
 
-        # Bắn API đa luồng song song (Max 18 luồng nếu vừa bật 1 vừa tắt 1)
+        # Bắn API đa luồng song song
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.rules_to_update)) as executor:
             futures = [executor.submit(send_req, rule_id, status) for rule_id, status in self.rules_to_update.items()]
             concurrent.futures.wait(futures)
@@ -394,11 +386,12 @@ class WMSUpdateRuleThread(QThread):
             elif is_flow:
                 payload["zone_id_list"] = ["SA4"]
                 payload["flow_pick_working_zone_list"] = [self.target_zone]
+
                 # Bỏ Hỏa tốc ở Flow Pick -> Luôn dùng channel id của đơn thường
                 payload["channel_id_list"] = ["50011", "50021", "50032"]
 
-                # Logic mới cho E1 và TOP dùng nhóm VNVLFPOG0117
-                if self.target_zone in ["TOP", "E1"]:
+                # Logic cho E1 và TOP và E2 dùng nhóm VNVLFPOG0117
+                if self.target_zone in ["TOP", "E1", "E2"]:
                     payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0117"]
                 else:
                     payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0053"]
@@ -617,9 +610,10 @@ class FetchDynamicTasksThread(QThread):
 class FetchFlowTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
 
-    def __init__(self, wms_cookie):
+    def __init__(self, wms_cookie, config_data):
         super().__init__()
         self.wms_cookie = wms_cookie
+        self.config_data = config_data
 
     def run(self):
         if not self.wms_cookie:
@@ -657,8 +651,8 @@ class FetchFlowTasksThread(QThread):
 
         # Call song song 2 API cho 2 group id khác nhau
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            f1 = executor.submit(fetch_group, "VNVLFPOG0053", "normal")  # Cho các khu bình thường
-            f2 = executor.submit(fetch_group, "VNVLFPOG0117", "normal")  # Mới thêm cho E1 và TOP
+            f1 = executor.submit(fetch_group, "VNVLFPOG0053", "normal")
+            f2 = executor.submit(fetch_group, "VNVLFPOG0117", "normal")
             concurrent.futures.wait([f1, f2])
 
         self.tasks_fetched.emit(flow_counts)
@@ -916,9 +910,8 @@ class ZoneListWidget(QListWidget):
 
     def __init__(self, zone_id, scale=1.0, watermark_text=None, parent=None):
         super().__init__(parent)
-        self.zone_id = zone_id  # Lưu ID nội bộ (vd: "Block A")
+        self.zone_id = zone_id
         self.scale = scale
-        # Watermark hiển thị
         display_title = DISPLAY_NAMES.get(zone_id, zone_id)
         self.watermark_text = watermark_text if watermark_text else (display_title if display_title else "CHỜ XỬ LÝ")
 
@@ -962,7 +955,6 @@ class ZoneListWidget(QListWidget):
                 if isinstance(data, dict):
                     data["block"] = self.zone_id
 
-                    # Nếu rơi vào vùng Cõi Tạm hoặc các vùng Flow Pick thì tắt tính năng Hỏa Tốc
                     if self.zone_id == "" or self.zone_id in FLOW_ZONES:
                         data["urgent"] = "N"
 
@@ -999,7 +991,6 @@ class MainWindow(QMainWindow):
         self.badges = {}
         self.dynamic_badges = {}
 
-        # Lưu trữ trạng thái bộ nút toggle
         self.current_toggle_states = {
             "NDD": False,
             "After-NDD": False,
@@ -1054,7 +1045,6 @@ class MainWindow(QMainWindow):
         input_vbox = QVBoxLayout()
         input_vbox.setSpacing(int(6 * self.scale))
 
-        # ---- TITLE VÀ SEARCH BAR ----
         title_search_layout = QHBoxLayout()
         lbl_scan_title = QLabel("Quỷ Môn Quan")
         lbl_scan_title.setStyleSheet(
@@ -1166,7 +1156,6 @@ class MainWindow(QMainWindow):
         normal_grid = QGridLayout()
         normal_grid.setSpacing(int(6 * self.scale))
 
-        # Row 0: Các block đơn lẻ (A, B, C, E)
         self.create_zone_box(normal_grid, "Block A", "#10B981", 0, 0, True, watermark_text="A")
         self.create_zone_box(normal_grid, "Block B", "#F59E0B", 0, 1, True, watermark_text="B")
         self.create_zone_box(normal_grid, "Block C", "#8B5CF6", 0, 2, True, watermark_text="C")
@@ -1201,7 +1190,6 @@ class MainWindow(QMainWindow):
             config_layout.addWidget(lbl, idx + 1, 0)
             config_layout.addWidget(txt_widget, idx + 1, 1)
 
-        # --- Thêm Toggle Switches ---
         lbl_dynamic_title = QLabel("⚡ Dynamic Wave Config")
         lbl_dynamic_title.setStyleSheet(
             f"font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; color: #9333EA; border: none; margin-top: 4px;")
@@ -1229,7 +1217,6 @@ class MainWindow(QMainWindow):
 
         normal_grid.addWidget(config_frame, 0, 4, 2, 1)
 
-        # Row 1: Các Block Kết hợp
         self.create_zone_box(normal_grid, "Block A&C", "#3B82F6", 1, 0, True, watermark_text="AC")
         self.create_zone_box(normal_grid, "Block B&C", "#3B82F6", 1, 1, True, watermark_text="BC")
         self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 2, True, watermark_text="ABC")
@@ -1249,6 +1236,7 @@ class MainWindow(QMainWindow):
         flow_color_a = "#06B6D4"
         flow_color_b = "#F97316"
         flow_color_c = "#8B5CF6"
+        flow_color_d = "#10B981"
 
         self.create_zone_box(flow_grid, "A1", flow_color_a, 0, 0, True, watermark_text="A1")
         self.create_zone_box(flow_grid, "A2", flow_color_a, 0, 1, True, watermark_text="A2")
@@ -1256,55 +1244,15 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "A4", flow_color_a, 0, 3, True, watermark_text="A4")
         self.create_zone_box(flow_grid, "B1", flow_color_b, 0, 4, True, watermark_text="B1")
         self.create_zone_box(flow_grid, "B2", flow_color_b, 0, 5, True, watermark_text="B2")
-        self.create_zone_box(flow_grid, "B3", flow_color_b, 1, 0, True, watermark_text="B3")
-        self.create_zone_box(flow_grid, "FD", "#EF4444", 1, 1, True, watermark_text="FD")
-        self.create_zone_box(flow_grid, "C1", flow_color_c, 1, 2, True, watermark_text="C1")
-        self.create_zone_box(flow_grid, "C2", flow_color_c, 1, 3, True, watermark_text="C2")
-        self.create_zone_box(flow_grid, "C3", flow_color_c, 1, 4, True, watermark_text="C3")
+        self.create_zone_box(flow_grid, "B3", flow_color_b, 0, 6, True, watermark_text="B3")
 
-        # --- SUB-TAB FOR E1 & TOP ---
-        sub_tab_container = QWidget()
-        sub_tab_layout = QVBoxLayout(sub_tab_container)
-        sub_tab_layout.setContentsMargins(0, 0, 0, 0)
-        sub_tab_layout.setSpacing(2)
-
-        sub_tab_btns_layout = QHBoxLayout()
-        sub_tab_btns_layout.setSpacing(2)
-
-        self.btn_sub_e1 = QPushButton("Điện Máy Xanh")
-        self.btn_sub_top = QPushButton("TopGia")
-
-        self.btn_sub_e1.setObjectName("sub_tab_active")
-        self.btn_sub_top.setObjectName("sub_tab_inactive")
-
-        self.btn_sub_e1.clicked.connect(lambda: self.switch_sub_tab(0))
-        self.btn_sub_top.clicked.connect(lambda: self.switch_sub_tab(1))
-
-        sub_tab_btns_layout.addWidget(self.btn_sub_e1)
-        sub_tab_btns_layout.addWidget(self.btn_sub_top)
-
-        sub_tab_layout.addLayout(sub_tab_btns_layout)
-
-        self.sub_stacked_widget = QStackedWidget()
-
-        e1_page = QWidget()
-        e1_layout = QVBoxLayout(e1_page)
-        e1_layout.setContentsMargins(0, 0, 0, 0)
-        self.create_zone_box(e1_layout, "E1", flow_color_c, 0, 0, is_grid=False, is_left_panel=False,
-                             watermark_text="E1")
-
-        top_page = QWidget()
-        top_layout = QVBoxLayout(top_page)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-        self.create_zone_box(top_layout, "TOP", flow_color_c, 0, 0, is_grid=False, is_left_panel=False,
-                             watermark_text="TOP")
-
-        self.sub_stacked_widget.addWidget(e1_page)
-        self.sub_stacked_widget.addWidget(top_page)
-
-        sub_tab_layout.addWidget(self.sub_stacked_widget)
-
-        flow_grid.addWidget(sub_tab_container, 1, 5)
+        self.create_zone_box(flow_grid, "FD", flow_color_b, 1, 0, True, watermark_text="FD")
+        self.create_zone_box(flow_grid, "C1", flow_color_c, 1, 1, True, watermark_text="C1")
+        self.create_zone_box(flow_grid, "C2", flow_color_c, 1, 2, True, watermark_text="C2")
+        self.create_zone_box(flow_grid, "C3", flow_color_c, 1, 3, True, watermark_text="C3")
+        self.create_zone_box(flow_grid, "E1", flow_color_d, 1, 4, True, watermark_text="E1")
+        self.create_zone_box(flow_grid, "E2", flow_color_d, 1, 5, True, watermark_text="E2")
+        self.create_zone_box(flow_grid, "TOP", flow_color_d, 1, 6, True, watermark_text="TOP")
 
         flow_layout_main.addLayout(flow_grid)
         self.stacked_widget.addWidget(flow_container)
@@ -1314,7 +1262,6 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(workspace_layout)
 
-    # --- TÍNH NĂNG TÌM KIẾM ---
     def on_search_text_changed(self, text):
         search_term = remove_accents(text.strip().lower())
         match_count = 0
@@ -1376,9 +1323,6 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'txt_search'):
             self.on_search_text_changed(self.txt_search.text())
 
-    # --------------------------
-
-    # --- LOGIC TOGGLE CÔNG TẮC ĐỘC QUYỀN ---
     def on_toggle_changed(self, changed_toggle_name):
         new_states = {
             "NDD": self.toggle_ndd.isChecked(),
@@ -1386,13 +1330,11 @@ class MainWindow(QMainWindow):
             "D-1": self.toggle_d1.isChecked()
         }
 
-        # Đảm bảo tính độc quyền: Bật 1 nút thì 2 nút kia phải TẮT
         if new_states[changed_toggle_name] is True:
             for k in new_states:
                 if k != changed_toggle_name:
                     new_states[k] = False
 
-        # Chặn Signal UI để set lại giao diện mà không gọi loop đệ quy
         self.toggle_ndd.blockSignals(True)
         self.toggle_andd.blockSignals(True)
         self.toggle_d1.blockSignals(True)
@@ -1405,23 +1347,18 @@ class MainWindow(QMainWindow):
         self.toggle_andd.blockSignals(False)
         self.toggle_d1.blockSignals(False)
 
-        # Tính toán Rule ID nào cần call API theo State MỚI so với State CŨ
         rules_to_update = {}
         for k, v in new_states.items():
             if v != self.current_toggle_states[k]:
-                # Nghĩa là trạng thái đã bị đổi (Tắt -> Bật hoặc Bật -> Tắt)
                 status_int = 1 if v else 0
                 for rule_id in WAVE_RULE_GROUPS[k]:
                     rules_to_update[rule_id] = status_int
 
-        # Cập nhật state cũ
         self.current_toggle_states = new_states.copy()
 
-        # Update Firebase Config
         config_data = self.get_current_config()
         self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
 
-        # Khởi chạy luồng bắn API song song
         if rules_to_update:
             api_thread = WMSUpdateWaveRuleThread(self.wms_cookie, rules_to_update)
             api_thread.finished_update.connect(self.on_wave_rules_updated)
@@ -1452,20 +1389,6 @@ class MainWindow(QMainWindow):
         self.btn_tab_flow.style().unpolish(self.btn_tab_flow)
         self.btn_tab_flow.style().polish(self.btn_tab_flow)
 
-    def switch_sub_tab(self, index):
-        self.sub_stacked_widget.setCurrentIndex(index)
-        if index == 0:
-            self.btn_sub_e1.setObjectName("sub_tab_active")
-            self.btn_sub_top.setObjectName("sub_tab_inactive")
-        else:
-            self.btn_sub_e1.setObjectName("sub_tab_inactive")
-            self.btn_sub_top.setObjectName("sub_tab_active")
-
-        self.btn_sub_e1.style().unpolish(self.btn_sub_e1)
-        self.btn_sub_e1.style().polish(self.btn_sub_e1)
-        self.btn_sub_top.style().unpolish(self.btn_sub_top)
-        self.btn_sub_top.style().polish(self.btn_sub_top)
-
     def create_zone_box(self, parent_layout, zone_id, top_border_color, row, col, is_grid=False, show_badge=True,
                         colspan=1, is_left_panel=False, watermark_text=None):
         box_frame = QFrame()
@@ -1489,7 +1412,6 @@ class MainWindow(QMainWindow):
         h_layout = QHBoxLayout()
         h_layout.setContentsMargins(0, 0, 0, 0)
 
-        # --- LẤY TÊN HIỂN THỊ TỪ TỪ ĐIỂN ---
         display_title = DISPLAY_NAMES.get(zone_id, zone_id)
         if is_left_panel: display_title = zone_id
 
@@ -1574,7 +1496,7 @@ class MainWindow(QMainWindow):
                     if isinstance(t_flow_data, int): t_flow_data = {"normal": t_flow_data, "urgent": 0}
 
                     t_norm = t_flow_data.get("normal", 0)
-                    t_urg = t_flow_data.get("urgent", 0)  # Sẽ luôn là 0 vì đã bỏ fetch Hỏa Tốc ở Flow
+                    t_urg = t_flow_data.get("urgent", 0)
 
                     self.badges[z_id].setText(f"👤 {people_count} | 📦 {t_norm} | 🔥 {t_urg}")
                 else:
@@ -1692,7 +1614,6 @@ class MainWindow(QMainWindow):
         act_n = None
 
         if data.get("block"):
-            # Vùng Flow Pick sẽ không có nút Hỏa Tốc
             if data.get("block") not in FLOW_ZONES:
                 act_y = menu.addAction("🔥 Gán Đơn Hỏa Tốc")
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
@@ -1764,7 +1685,7 @@ class MainWindow(QMainWindow):
         task_thread.tasks_fetched.connect(self.on_wms_tasks_fetched)
         self.start_thread(task_thread)
 
-        flow_thread = FetchFlowTasksThread(self.wms_cookie)
+        flow_thread = FetchFlowTasksThread(self.wms_cookie, self.get_current_config())
         flow_thread.tasks_fetched.connect(self.on_flow_tasks_fetched)
         self.start_thread(flow_thread)
 
@@ -1794,7 +1715,6 @@ class MainWindow(QMainWindow):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
 
-        # Hàm giúp ép kiểu an toàn ra Boolean kể cả khi Firebase lưu nhầm thành String 'true'/'false'
         def _parse_bool(val):
             if isinstance(val, bool): return val
             if isinstance(val, str): return val.lower() == 'true'
@@ -1806,7 +1726,6 @@ class MainWindow(QMainWindow):
             self.txt_cfg_c.setText(config_dict.get("Block C", ""))
             self.txt_cfg_e.setText(config_dict.get("Block E", ""))
 
-            # Sync lại công tắc, chặn event không cho gọi API lúc load để tránh spam API
             self.toggle_ndd.blockSignals(True)
             self.toggle_andd.blockSignals(True)
             self.toggle_d1.blockSignals(True)
