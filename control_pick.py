@@ -20,34 +20,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # =========================================================================
-# TỪ ĐIỂN ĐỔI TÊN HIỂN THỊ (DISPLAY NAMES)
-# =========================================================================
-DISPLAY_NAMES = {
-    "Block A": "A",
-    "Block B": "B",
-    "Block C": "C",
-    "Block E": "E",
-    "Block A&B": "AB",
-    "Block A&C": "AC",
-    "Block B&C": "BC",
-    "Block A&B&C": "ABC",
-    "A1": "A1",
-    "A2": "A2",
-    "A3": "A3",
-    "A4": "A4",
-    "B1": "B1",
-    "B2": "B2",
-    "B3": "B3",
-    "FD": "FD",
-    "C1": "C1",
-    "C2": "C2",
-    "C3": "C3",
-    "E1": "E1",
-    "E2": "E2",
-    "TOP": "TOP"
-}
-
-# =========================================================================
 # WAVE RULE GROUPS
 # =========================================================================
 WAVE_RULE_GROUPS = {
@@ -58,6 +30,14 @@ WAVE_RULE_GROUPS = {
                   "VNVLDWR0039", "VNVLDWR0040"],
     "D-1": ["VNVLDWR0041", "VNVLDWR0042", "VNVLDWR0043", "VNVLDWR0044", "VNVLDWR0045", "VNVLDWR0046", "VNVLDWR0047",
             "VNVLDWR0048", "VNVLDWR0049"]
+}
+
+AHM_DYNAMIC_RULES = {
+    "COT1_18_23": [f"VNVLDWR{str(i).zfill(4)}" for i in range(50, 70)],  # 50 - 69
+    "COT1_00_04": [f"VNVLDWR{str(i).zfill(4)}" for i in range(70, 81)],  # 70 - 80
+    "COT2_04_10": [f"VNVLDWR{str(i).zfill(4)}" for i in range(82, 93)],  # 82 - 92
+    "COT3_10_14": [f"VNVLDWR{str(i).zfill(4)}" for i in range(93, 104)],  # 93 - 103
+    "COT4_14_18": [f"VNVLDWR{str(i).zfill(4)}" for i in range(104, 115)]  # 104 - 114
 }
 
 
@@ -529,7 +509,7 @@ class FetchDynamicTasksThread(QThread):
             self.tasks_fetched.emit({})
             return
 
-        counts = {block: set() for block in NORMAL_BLOCKS}
+        counts = {block: {"normal": set(), "urgent": set()} for block in NORMAL_BLOCKS}
 
         cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
         cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
@@ -570,6 +550,11 @@ class FetchDynamicTasksThread(QThread):
                     if not pickup_id:
                         continue
 
+                    # Determine if it's an urgent or normal dynamic task
+                    channel_ids = set(task.get("channel_id_list", []))
+                    is_urgent = bool(channel_ids & {"50033", "50051", "50044"})
+                    task_type = "urgent" if is_urgent else "normal"
+
                     z_str = task.get("zone_list", "")
                     t_zones = set([z.strip() for z in z_str.split(",") if z.strip()])
 
@@ -579,27 +564,27 @@ class FetchDynamicTasksThread(QThread):
                     has_e = bool(t_zones & cfg_e)
 
                     if has_a and has_b and has_c:
-                        counts["Block A&B&C"].add(pickup_id)
+                        counts["Block A&B&C"][task_type].add(pickup_id)
                     elif has_a and has_b:
-                        counts["Block A&B"].add(pickup_id)
+                        counts["Block A&B"][task_type].add(pickup_id)
                     elif has_a and has_c:
-                        counts["Block A&C"].add(pickup_id)
+                        counts["Block A&C"][task_type].add(pickup_id)
                     elif has_b and has_c:
-                        counts["Block B&C"].add(pickup_id)
+                        counts["Block B&C"][task_type].add(pickup_id)
                     elif has_a:
-                        counts["Block A"].add(pickup_id)
+                        counts["Block A"][task_type].add(pickup_id)
                     elif has_b:
-                        counts["Block B"].add(pickup_id)
+                        counts["Block B"][task_type].add(pickup_id)
                     elif has_c:
-                        counts["Block C"].add(pickup_id)
+                        counts["Block C"][task_type].add(pickup_id)
                     elif has_e:
-                        counts["Block E"].add(pickup_id)
+                        counts["Block E"][task_type].add(pickup_id)
 
                 if not batch_list or (pageno * 200) >= total:
                     break
                 pageno += 1
 
-            final_counts = {k: len(v) for k, v in counts.items()}
+            final_counts = {k: {"normal": len(v["normal"]), "urgent": len(v["urgent"])} for k, v in counts.items()}
             self.tasks_fetched.emit(final_counts)
 
         except Exception as e:
@@ -631,9 +616,10 @@ class FetchFlowTasksThread(QThread):
             "Cookie": self.wms_cookie
         }
 
-        flow_counts = {zone: {"normal": 0, "urgent": 0} for zone in FLOW_ZONES}
+        # Chỉ đếm đơn thường theo yêu cầu trước đó
+        flow_counts = {zone: {"normal": 0} for zone in FLOW_ZONES}
 
-        def fetch_group(group_id, task_type):
+        def fetch_group(group_id):
             url = f"https://wms.ssc.shopee.vn/api/v2/apps/process/flowpicking/get_progress_monitoring_stats?group_id={group_id}&area_dimension_type=1&efficiency_ratio=2"
             try:
                 res = requests.get(url, headers=headers, timeout=10)
@@ -644,15 +630,14 @@ class FetchFlowTasksThread(QThread):
                             area_name = item.get("area_name")
                             order_qty = item.get("order_qty", 0)
                             if area_name not in flow_counts:
-                                flow_counts[area_name] = {"normal": 0, "urgent": 0}
-                            flow_counts[area_name][task_type] += order_qty
+                                flow_counts[area_name] = {"normal": 0}
+                            flow_counts[area_name]["normal"] += order_qty
             except Exception as e:
                 pass
 
-        # Call song song 2 API cho 2 group id khác nhau
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            f1 = executor.submit(fetch_group, "VNVLFPOG0053", "normal")
-            f2 = executor.submit(fetch_group, "VNVLFPOG0117", "normal")
+            f1 = executor.submit(fetch_group, "VNVLFPOG0053")
+            f2 = executor.submit(fetch_group, "VNVLFPOG0117")
             concurrent.futures.wait([f1, f2])
 
         self.tasks_fetched.emit(flow_counts)
@@ -912,7 +897,7 @@ class ZoneListWidget(QListWidget):
         super().__init__(parent)
         self.zone_id = zone_id
         self.scale = scale
-        display_title = DISPLAY_NAMES.get(zone_id, zone_id)
+        display_title = zone_id
         self.watermark_text = watermark_text if watermark_text else (display_title if display_title else "CHỜ XỬ LÝ")
 
         self.setAcceptDrops(True)
@@ -985,16 +970,23 @@ class MainWindow(QMainWindow):
         self.current_firebase_data = {}
 
         self.task_counts = {}
-        self.flow_task_counts = {}
         self.dynamic_task_counts = {}
+        self.flow_task_counts = {}
 
         self.badges = {}
-        self.dynamic_badges = {}
 
         self.current_toggle_states = {
             "NDD": False,
             "After-NDD": False,
             "D-1": False
+        }
+
+        self.current_ahm_states = {
+            "COT1_18_23": False,
+            "COT1_00_04": False,
+            "COT2_04_10": False,
+            "COT3_10_14": False,
+            "COT4_14_18": False
         }
 
         self.init_ui()
@@ -1018,7 +1010,12 @@ class MainWindow(QMainWindow):
             "Block E": self.txt_cfg_e.text().strip(),
             "NDD": self.toggle_ndd.isChecked(),
             "After-NDD": self.toggle_andd.isChecked(),
-            "D-1": self.toggle_d1.isChecked()
+            "D-1": self.toggle_d1.isChecked(),
+            "COT1_18_23": self.toggle_cot1_18.isChecked(),
+            "COT1_00_04": self.toggle_cot1_00.isChecked(),
+            "COT2_04_10": self.toggle_cot2_04.isChecked(),
+            "COT3_10_14": self.toggle_cot3_10.isChecked(),
+            "COT4_14_18": self.toggle_cot4_14.isChecked()
         }
 
     def init_ui(self):
@@ -1168,7 +1165,7 @@ class MainWindow(QMainWindow):
 
         config_layout = QGridLayout(config_frame)
         config_layout.setContentsMargins(pad_main, pad_main, pad_main, pad_main)
-        config_layout.setSpacing(int(6 * self.scale))
+        config_layout.setSpacing(int(4 * self.scale))
 
         lbl_cfg_title = QLabel("⚙️ Configuration")
         lbl_cfg_title.setStyleSheet(
@@ -1210,10 +1207,42 @@ class MainWindow(QMainWindow):
             config_layout.addWidget(lbl, 6 + idx, 0)
             config_layout.addWidget(toggle_widget, 6 + idx, 1)
 
+        # --- AHM DYNAMIC CONFIG ---
+        lbl_ahm_title = QLabel("⚡ AHM Dynamic")
+        lbl_ahm_title.setStyleSheet(
+            f"font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; color: #D946EF; border: none; margin-top: 4px;")
+        config_layout.addWidget(lbl_ahm_title, 9, 0, 1, 2)
+
+        self.toggle_cot1_18 = ToggleSwitch()
+        self.toggle_cot1_00 = ToggleSwitch()
+        self.toggle_cot2_04 = ToggleSwitch()
+        self.toggle_cot3_10 = ToggleSwitch()
+        self.toggle_cot4_14 = ToggleSwitch()
+
+        self.toggle_cot1_18.clicked.connect(lambda: self.on_ahm_toggle_changed("COT1_18_23"))
+        self.toggle_cot1_00.clicked.connect(lambda: self.on_ahm_toggle_changed("COT1_00_04"))
+        self.toggle_cot2_04.clicked.connect(lambda: self.on_ahm_toggle_changed("COT2_04_10"))
+        self.toggle_cot3_10.clicked.connect(lambda: self.on_ahm_toggle_changed("COT3_10_14"))
+        self.toggle_cot4_14.clicked.connect(lambda: self.on_ahm_toggle_changed("COT4_14_18"))
+
+        ahm_items = [
+            ("[COT 1] 18:00 - 23:59:", self.toggle_cot1_18),
+            ("[COT 1] 00:00 - 04:00:", self.toggle_cot1_00),
+            ("[COT 2] 04:00 - 10:30:", self.toggle_cot2_04),
+            ("[COT 3] 10:30 - 14:30:", self.toggle_cot3_10),
+            ("[COT 4] 14:30 - 18:00:", self.toggle_cot4_14)
+        ]
+
+        for idx, (lbl_text, toggle_widget) in enumerate(ahm_items):
+            lbl = QLabel(lbl_text)
+            lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
+            config_layout.addWidget(lbl, 10 + idx, 0)
+            config_layout.addWidget(toggle_widget, 10 + idx, 1)
+
         self.btn_edit_config = QPushButton("Chỉnh sửa")
         self.btn_edit_config.setStyleSheet("margin-top: 8px;")
         self.btn_edit_config.clicked.connect(self.toggle_config_edit)
-        config_layout.addWidget(self.btn_edit_config, 9, 0, 1, 2)
+        config_layout.addWidget(self.btn_edit_config, 16, 0, 1, 2)
 
         normal_grid.addWidget(config_frame, 0, 4, 2, 1)
 
@@ -1366,6 +1395,57 @@ class MainWindow(QMainWindow):
             self.lbl_status.setText(f"⚡ Đang cấu hình {len(rules_to_update)} Wave Rules song song...")
             self.lbl_status.setStyleSheet("color: #9333EA;")
 
+    def on_ahm_toggle_changed(self, changed_toggle_name):
+        new_states = {
+            "COT1_18_23": self.toggle_cot1_18.isChecked(),
+            "COT1_00_04": self.toggle_cot1_00.isChecked(),
+            "COT2_04_10": self.toggle_cot2_04.isChecked(),
+            "COT3_10_14": self.toggle_cot3_10.isChecked(),
+            "COT4_14_18": self.toggle_cot4_14.isChecked()
+        }
+
+        if new_states[changed_toggle_name] is True:
+            for k in new_states:
+                if k != changed_toggle_name:
+                    new_states[k] = False
+
+        self.toggle_cot1_18.blockSignals(True)
+        self.toggle_cot1_00.blockSignals(True)
+        self.toggle_cot2_04.blockSignals(True)
+        self.toggle_cot3_10.blockSignals(True)
+        self.toggle_cot4_14.blockSignals(True)
+
+        self.toggle_cot1_18.setChecked(new_states["COT1_18_23"])
+        self.toggle_cot1_00.setChecked(new_states["COT1_00_04"])
+        self.toggle_cot2_04.setChecked(new_states["COT2_04_10"])
+        self.toggle_cot3_10.setChecked(new_states["COT3_10_14"])
+        self.toggle_cot4_14.setChecked(new_states["COT4_14_18"])
+
+        self.toggle_cot1_18.blockSignals(False)
+        self.toggle_cot1_00.blockSignals(False)
+        self.toggle_cot2_04.blockSignals(False)
+        self.toggle_cot3_10.blockSignals(False)
+        self.toggle_cot4_14.blockSignals(False)
+
+        rules_to_update = {}
+        for k, v in new_states.items():
+            if v != self.current_ahm_states[k]:
+                status_int = 1 if v else 0
+                for rule_id in AHM_DYNAMIC_RULES[k]:
+                    rules_to_update[rule_id] = status_int
+
+        self.current_ahm_states = new_states.copy()
+
+        config_data = self.get_current_config()
+        self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
+
+        if rules_to_update:
+            api_thread = WMSUpdateWaveRuleThread(self.wms_cookie, rules_to_update)
+            api_thread.finished_update.connect(self.on_wave_rules_updated)
+            self.start_thread(api_thread)
+            self.lbl_status.setText(f"⚡ Đang cấu hình {len(rules_to_update)} AHM Wave Rules song song...")
+            self.lbl_status.setStyleSheet("color: #D946EF;")
+
     @pyqtSlot(int, int)
     def on_wave_rules_updated(self, success_count, total_count):
         if success_count == total_count:
@@ -1412,37 +1492,64 @@ class MainWindow(QMainWindow):
         h_layout = QHBoxLayout()
         h_layout.setContentsMargins(0, 0, 0, 0)
 
-        display_title = DISPLAY_NAMES.get(zone_id, zone_id)
-        if is_left_panel: display_title = zone_id
-
-        lbl_title = QLabel(display_title)
-        font_size_title = max(10, int(13 * self.scale))
-        lbl_title.setStyleSheet(f"font-weight: 600; font-size: {font_size_title}px; color: #1E293B;")
-        h_layout.addWidget(lbl_title)
-        h_layout.addStretch()
-
         lw_id = "" if is_left_panel else zone_id
 
-        if show_badge:
-            right_vbox = QVBoxLayout()
-            right_vbox.setSpacing(2)
-            right_vbox.setContentsMargins(0, 0, 0, 0)
+        # Chỉ giữ lại Label tiêu đề cho panel "Cõi Tạm" ở bên trái
+        if is_left_panel:
+            lbl_title = QLabel(zone_id)
+            font_size_title = max(10, int(13 * self.scale))
+            lbl_title.setStyleSheet(f"font-weight: 600; font-size: {font_size_title}px; color: #1E293B;")
+            h_layout.addWidget(lbl_title)
+            h_layout.addStretch()
 
-            badge = QLabel("0")
+        if show_badge:
             font_size_badge = max(9, int(11 * self.scale))
-            badge.setStyleSheet(
-                f"background-color: #FFFFFF; color: {top_border_color}; font-weight: 600; border: 1px solid #E2E8F0; border-radius: 4px; padding: 2px 6px; font-size: {font_size_badge}px;")
-            right_vbox.addWidget(badge, alignment=Qt.AlignRight)
-            self.badges[lw_id] = badge
+
+            lbl_people = QLabel("👤 0")
+            lbl_people.setStyleSheet(
+                f"background-color: #FFFFFF; color: {top_border_color}; font-weight: 600; border: 1px solid #E2E8F0; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
+            )
+            lbl_people.setAlignment(Qt.AlignCenter)
+
+            badges_dict = {"people": lbl_people}
 
             if lw_id in NORMAL_BLOCKS:
-                dyn_badge = QLabel("⚡Dynamic: 0")
-                dyn_badge.setStyleSheet(
-                    f"background-color: #FFFFFF; color: #9333EA; font-weight: 600; border: 1px solid #E9D5FF; border-radius: 4px; padding: 2px 6px; font-size: {font_size_badge}px;")
-                right_vbox.addWidget(dyn_badge, alignment=Qt.AlignRight)
-                self.dynamic_badges[lw_id] = dyn_badge
+                lbl_normal = QLabel("Normal\n📦 Wave: 0\n⚡ Auto: 0")
+                lbl_normal.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #3B82F6; font-weight: 600; border: 1px solid #BFDBFE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
+                )
+                lbl_normal.setAlignment(Qt.AlignCenter)
 
-            h_layout.addLayout(right_vbox)
+                lbl_urgent = QLabel("Hỏa Tốc\n🔥 Urg: 0\n⚡ Auto: 0")
+                lbl_urgent.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #EF4444; font-weight: 600; border: 1px solid #FECACA; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
+                )
+                lbl_urgent.setAlignment(Qt.AlignCenter)
+
+                # Dùng stretch để đẩy Normal qua trái, Hỏa Tốc qua phải, People tự động ở giữa
+                h_layout.addWidget(lbl_normal)
+                h_layout.addStretch()
+                h_layout.addWidget(lbl_people)
+                h_layout.addStretch()
+                h_layout.addWidget(lbl_urgent)
+
+                badges_dict["normal"] = lbl_normal
+                badges_dict["urgent"] = lbl_urgent
+            elif lw_id in FLOW_ZONES:
+                lbl_flow = QLabel("📦 0")
+                lbl_flow.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #06B6D4; font-weight: 600; border: 1px solid #A5F3FC; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
+                )
+                lbl_flow.setAlignment(Qt.AlignCenter)
+
+                h_layout.addWidget(lbl_people)
+                h_layout.addWidget(lbl_flow)
+                h_layout.addStretch()
+                badges_dict["flow"] = lbl_flow
+            else:
+                h_layout.addWidget(lbl_people)
+
+            self.badges[lw_id] = badges_dict
 
         box_layout.addLayout(h_layout)
 
@@ -1478,29 +1585,26 @@ class MainWindow(QMainWindow):
                 total_flow += people_count
 
             if z_id in self.badges:
+                b_dict = self.badges[z_id]
+                b_dict["people"].setText(f"👤 {people_count}")
+
                 if z_id in NORMAL_BLOCKS:
                     task_data = self.task_counts.get(z_id, {"normal": 0, "urgent": 0})
-                    if isinstance(task_data, int): task_data = {"normal": task_data, "urgent": 0}
+                    dyn_data = self.dynamic_task_counts.get(z_id, {"normal": 0, "urgent": 0})
 
                     t_norm = task_data.get("normal", 0)
                     t_urg = task_data.get("urgent", 0)
 
-                    self.badges[z_id].setText(f"👤 {people_count} | 📦 {t_norm} | 🔥 {t_urg}")
+                    d_norm = dyn_data.get("normal", 0)
+                    d_urg = dyn_data.get("urgent", 0)
 
-                    if z_id in self.dynamic_badges:
-                        t_dyn = self.dynamic_task_counts.get(z_id, 0)
-                        self.dynamic_badges[z_id].setText(f"⚡ Dynamic: {t_dyn}")
-
+                    b_dict["normal"].setText(f"Normal\n📦 Wave: {t_norm}\n⚡ Auto: {d_norm}")
+                    b_dict["urgent"].setText(f"Hỏa Tốc\n🔥 Wave: {t_urg}\n⚡ Auto: {d_urg}")
                 elif z_id in FLOW_ZONES:
-                    t_flow_data = self.flow_task_counts.get(z_id, {"normal": 0, "urgent": 0})
-                    if isinstance(t_flow_data, int): t_flow_data = {"normal": t_flow_data, "urgent": 0}
-
-                    t_norm = t_flow_data.get("normal", 0)
-                    t_urg = t_flow_data.get("urgent", 0)
-
-                    self.badges[z_id].setText(f"👤 {people_count} | 📦 {t_norm} | 🔥 {t_urg}")
-                else:
-                    self.badges[z_id].setText(f"👤 {people_count}")
+                    f_data = self.flow_task_counts.get(z_id, {"normal": 0})
+                    f_norm = f_data.get("normal", 0) if isinstance(f_data, dict) else 0
+                    if "flow" in b_dict:
+                        b_dict["flow"].setText(f"📦 {f_norm}")
 
         if hasattr(self, 'btn_tab_normal'):
             self.btn_tab_normal.setText(f"🎯 PICK NORMAL (👤 Tổng: {total_normal})")
@@ -1701,13 +1805,13 @@ class MainWindow(QMainWindow):
         self.lbl_status.setStyleSheet("color: #10B981;")
 
     @pyqtSlot(dict)
-    def on_flow_tasks_fetched(self, counts):
-        self.flow_task_counts = counts
+    def on_dynamic_tasks_fetched(self, counts):
+        self.dynamic_task_counts = counts
         self.update_all_badges()
 
     @pyqtSlot(dict)
-    def on_dynamic_tasks_fetched(self, counts):
-        self.dynamic_task_counts = counts
+    def on_flow_tasks_fetched(self, counts):
+        self.flow_task_counts = counts
         self.update_all_badges()
 
     @pyqtSlot(object, object)
@@ -1726,6 +1830,7 @@ class MainWindow(QMainWindow):
             self.txt_cfg_c.setText(config_dict.get("Block C", ""))
             self.txt_cfg_e.setText(config_dict.get("Block E", ""))
 
+            # Update Wave Toggles
             self.toggle_ndd.blockSignals(True)
             self.toggle_andd.blockSignals(True)
             self.toggle_d1.blockSignals(True)
@@ -1743,6 +1848,39 @@ class MainWindow(QMainWindow):
             self.toggle_ndd.blockSignals(False)
             self.toggle_andd.blockSignals(False)
             self.toggle_d1.blockSignals(False)
+
+            # Update AHM Toggles
+            self.toggle_cot1_18.blockSignals(True)
+            self.toggle_cot1_00.blockSignals(True)
+            self.toggle_cot2_04.blockSignals(True)
+            self.toggle_cot3_10.blockSignals(True)
+            self.toggle_cot4_14.blockSignals(True)
+
+            is_cot1_18 = _parse_bool(config_dict.get("COT1_18_23", False))
+            is_cot1_00 = _parse_bool(config_dict.get("COT1_00_04", False))
+            is_cot2_04 = _parse_bool(config_dict.get("COT2_04_10", False))
+            is_cot3_10 = _parse_bool(config_dict.get("COT3_10_14", False))
+            is_cot4_14 = _parse_bool(config_dict.get("COT4_14_18", False))
+
+            self.toggle_cot1_18.setChecked(is_cot1_18)
+            self.toggle_cot1_00.setChecked(is_cot1_00)
+            self.toggle_cot2_04.setChecked(is_cot2_04)
+            self.toggle_cot3_10.setChecked(is_cot3_10)
+            self.toggle_cot4_14.setChecked(is_cot4_14)
+
+            self.current_ahm_states = {
+                "COT1_18_23": is_cot1_18,
+                "COT1_00_04": is_cot1_00,
+                "COT2_04_10": is_cot2_04,
+                "COT3_10_14": is_cot3_10,
+                "COT4_14_18": is_cot4_14
+            }
+
+            self.toggle_cot1_18.blockSignals(False)
+            self.toggle_cot1_00.blockSignals(False)
+            self.toggle_cot2_04.blockSignals(False)
+            self.toggle_cot3_10.blockSignals(False)
+            self.toggle_cot4_14.blockSignals(False)
 
         if pickers_dict is None:
             self.lbl_status.setText("❌ Lỗi đồng bộ Firebase!")
