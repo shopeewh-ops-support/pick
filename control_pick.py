@@ -32,19 +32,6 @@ WAVE_RULE_GROUPS = {
             "VNVLDWR0048", "VNVLDWR0049"]
 }
 
-AHM_DYNAMIC_RULES = {
-    "COT1_18_23": ["VNVLDWR0050", "VNVLDWR0069", "VNVLDWR0117", "VNVLDWR0118", "VNVLDWR0051", "VNVLDWR0062", "VNVLDWR0063",
-                   "VNVLDWR0064", "VNVLDWR0065", "VNVLDWR0066", "VNVLDWR0067", "VNVLDWR0068"],
-    "COT1_00_04": ["VNVLDWR0070", "VNVLDWR0071", "VNVLDWR0072", "VNVLDWR0074", "VNVLDWR0075", "VNVLDWR0076", "VNVLDWR0077",
-                   "VNVLDWR0078", "VNVLDWR0079", "VNVLDWR0080", "VNVLDWR0119", "VNVLDWR0120"],
-    "COT2_04_10": ["VNVLDWR0082", "VNVLDWR0083", "VNVLDWR0084", "VNVLDWR0086", "VNVLDWR0087", "VNVLDWR0088", "VNVLDWR0089",
-                   "VNVLDWR0090", "VNVLDWR0091", "VNVLDWR0092", "VNVLDWR0121", "VNVLDWR0122"],
-    "COT3_10_14": ["VNVLDWR0093", "VNVLDWR0094", "VNVLDWR0095", "VNVLDWR0096", "VNVLDWR0097", "VNVLDWR0098", "VNVLDWR0099", "VNVLDWR0100",
-                   "VNVLDWR0101", "VNVLDWR0102", "VNVLDWR0103", "VNVLDWR0115", "VNVLDWR0116" ],
-    "COT4_14_18": ["VNVLDWR0104", "VNVLDWR0105", "VNVLDWR0106", "VNVLDWR0108", "VNVLDWR0109", "VNVLDWR0110", "VNVLDWR0111",
-                   "VNVLDWR0112", "VNVLDWR0113", "VNVLDWR0114", "VNVLDWR0123", "VNVLDWR0124" ]
-}
-
 
 # --- HÀM LOẠI BỎ DẤU TIẾNG VIỆT ---
 def remove_accents(input_str):
@@ -187,6 +174,7 @@ def get_dynamic_qss(scale):
 
 # --- CONSTANTS ---
 FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "FD", "C1", "C2", "C3", "E1", "E2", "TOP"]
+FLOW_NO_PACK_ZONES = ["E1", "E2", "TOP"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block E", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
@@ -345,9 +333,46 @@ class WMSUpdateRuleThread(QThread):
             elif self.target_zone == "Block A&B&C":
                 normal_zones.update(cfg_a + cfg_b + cfg_c)
 
-        def send_req(staff_ids, is_urg):
-            if not staff_ids: return
+        def send_req(staff_data_list, is_urg):
+            if not staff_data_list: return
 
+            # Phân tách ID nhân viên để xử lý theo Pack Type nếu ở Flow Pick
+            if is_flow and self.target_zone not in FLOW_NO_PACK_ZONES:
+                pouch_staff_ids = [p["user_id"] for p in staff_data_list if p.get("flow_pack_type", "P") == "P"]
+                box_staff_ids = [p["user_id"] for p in staff_data_list if p.get("flow_pack_type") == "B"]
+
+                # Hàm thực hiện POST API cho Flow Pick phân theo Pack Type
+                def send_flow_req(ids, group_id):
+                    if not ids: return
+                    payload = {
+                        "checkbox_bit_set": 29,
+                        "zone_hard_restrict": 1,
+                        "zone_hard_restrict_apply_urgent": 1,
+                        "channel_hard_restrict": 1,
+                        "channel_hard_restrict_apply_urgent": 1,
+                        "shop_id_list": [],
+                        "shop_hard_restrict": 0,
+                        "shop_hard_restrict_apply_urgent": 0,
+                        "cross_zone_level": 0,
+                        "cross_zone_control": 0,
+                        "preferred_area_level": 0,
+                        "staff_id_list": ids,
+                        "zone_id_list": ["SA4"],
+                        "flow_pick_working_zone_list": [self.target_zone],
+                        "channel_id_list": ["50011", "50021", "50032"],
+                        "flow_pick_order_group_id_list": [group_id]
+                    }
+                    try:
+                        requests.post(url, json=payload, headers=headers, timeout=10)
+                    except Exception as e:
+                        print(f"[DEBUG][WMS Update Rule] Lỗi API Request Flow Pick: {e}")
+
+                send_flow_req(pouch_staff_ids, "VNVLFPOG0134")
+                send_flow_req(box_staff_ids, "VNVLFPOG0135")
+                return
+
+            # Xử lý cho Cõi Tạm, Normal Pick và Flow Pick vùng đặc biệt (E1, E2, TOP)
+            staff_ids = [p["user_id"] for p in staff_data_list]
             payload = {
                 "checkbox_bit_set": 29,
                 "zone_hard_restrict": 1,
@@ -367,7 +392,7 @@ class WMSUpdateRuleThread(QThread):
                 payload["zone_id_list"] = ["SA4"]
                 payload["flow_pick_working_zone_list"] = ["SA4"]
                 payload["channel_id_list"] = ["50011", "50021", "50032"]
-                payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0053", "VNVLFPOG0107"]
+                payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0053"]
             elif is_flow:
                 payload["zone_id_list"] = ["SA4"]
                 payload["flow_pick_working_zone_list"] = [self.target_zone]
@@ -376,23 +401,24 @@ class WMSUpdateRuleThread(QThread):
                 payload["channel_id_list"] = ["50011", "50021", "50032"]
 
                 # Logic cho E1 và TOP và E2 dùng nhóm VNVLFPOG0117
-                if self.target_zone in ["TOP", "E1", "E2"]:
-                    payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0117"]
-                else:
-                    payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0053"]
+                payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0117"]
             else:
                 payload["zone_id_list"] = list(normal_zones) if normal_zones else ["SA4"]
                 payload["flow_pick_working_zone_list"] = ["SA4"]
                 payload["channel_id_list"] = ["50033", "50051", "50044"] if is_urg else ["50011", "50021", "50032"]
-                payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0107"] if is_urg else ["VNVLFPOG0053"]
+                # Đã loại bỏ VNVLFPOG0107
+                payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0053"]
 
             try:
                 requests.post(url, json=payload, headers=headers, timeout=10)
             except Exception as e:
                 print(f"[DEBUG][WMS Update Rule] Lỗi API Request: {e}")
 
-        send_req(urgent_pickers, True)
-        send_req(normal_pickers, False)
+        urgent_data = [p for p in self.picker_list if p.get("urgent") == "Y"]
+        normal_data = [p for p in self.picker_list if p.get("urgent") != "Y"]
+
+        send_req(urgent_data, True)
+        send_req(normal_data, False)
 
 
 class FetchTasksThread(QThread):
@@ -466,6 +492,7 @@ class FetchTasksThread(QThread):
                     break
                 pageno += 1
 
+            # Bỏ phần đếm Task cho AHM Dynamic, chỉ giữ đếm Zone Block
             for task in all_tasks:
                 z_str = task.get("zone_list", "")
                 t_zones = set([z.strip() for z in z_str.split(",") if z.strip()])
@@ -555,7 +582,6 @@ class FetchDynamicTasksThread(QThread):
                     if not pickup_id:
                         continue
 
-                    # Determine if it's an urgent or normal dynamic task
                     channel_ids = set(task.get("channel_id_list", []))
                     is_urgent = bool(channel_ids & {"50033", "50051", "50044"})
                     task_type = "urgent" if is_urgent else "normal"
@@ -621,10 +647,10 @@ class FetchFlowTasksThread(QThread):
             "Cookie": self.wms_cookie
         }
 
-        # Chỉ đếm đơn thường theo yêu cầu trước đó
-        flow_counts = {zone: {"normal": 0} for zone in FLOW_ZONES}
+        # Lưu số lượng Pouch, Box, Other (VNVLFPOG0117)
+        flow_counts = {zone: {"P": 0, "B": 0, "Other": 0} for zone in FLOW_ZONES}
 
-        def fetch_group(group_id):
+        def fetch_group(group_id, key_name):
             url = f"https://wms.ssc.shopee.vn/api/v2/apps/process/flowpicking/get_progress_monitoring_stats?group_id={group_id}&area_dimension_type=1&efficiency_ratio=2"
             try:
                 res = requests.get(url, headers=headers, timeout=10)
@@ -635,15 +661,16 @@ class FetchFlowTasksThread(QThread):
                             area_name = item.get("area_name")
                             order_qty = item.get("order_qty", 0)
                             if area_name not in flow_counts:
-                                flow_counts[area_name] = {"normal": 0}
-                            flow_counts[area_name]["normal"] += order_qty
+                                flow_counts[area_name] = {"P": 0, "B": 0, "Other": 0}
+                            flow_counts[area_name][key_name] += order_qty
             except Exception as e:
                 pass
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            f1 = executor.submit(fetch_group, "VNVLFPOG0053")
-            f2 = executor.submit(fetch_group, "VNVLFPOG0117")
-            concurrent.futures.wait([f1, f2])
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            f1 = executor.submit(fetch_group, "VNVLFPOG0134", "P")
+            f2 = executor.submit(fetch_group, "VNVLFPOG0135", "B")
+            f3 = executor.submit(fetch_group, "VNVLFPOG0117", "Other")
+            concurrent.futures.wait([f1, f2, f3])
 
         self.tasks_fetched.emit(flow_counts)
 
@@ -669,7 +696,8 @@ class FirebaseUpdateThread(QThread):
                     "sex": self.data.get("sex", ""),
                     "block": self.data.get("block", ""),
                     "color": self.data.get("color", "black"),
-                    "urgent": self.data.get("urgent", "N")
+                    "urgent": self.data.get("urgent", "N"),
+                    "flow_pack_type": self.data.get("flow_pack_type", "P")  # Cập nhật Pack Type
                 }
                 url = f"{FIREBASE_PICKER_URL}/{safe_uid}.json"
                 requests.put(url, json=payload, timeout=10)
@@ -863,7 +891,7 @@ class ProcessApiThread(QThread):
                     color_tag = "#DB2777"
 
             result = {"name": emp_name, "wms_id": emp_wmsid, "user_id": emp_userid, "sex": emp_sex, "color": color_tag,
-                      "block": "", "urgent": "N"}
+                      "block": "", "urgent": "N", "flow_pack_type": "P"}
             self.result_ready.emit(result)
 
 
@@ -945,10 +973,26 @@ class ZoneListWidget(QListWidget):
                 if isinstance(data, dict):
                     data["block"] = self.zone_id
 
-                    if self.zone_id == "" or self.zone_id in FLOW_ZONES:
+                    # Khởi tạo mặc định nếu thuộc FLOW_ZONES
+                    if self.zone_id in FLOW_ZONES:
                         data["urgent"] = "N"
+                        if self.zone_id not in FLOW_NO_PACK_ZONES:
+                            # Luôn set Pouch nếu kéo vào các ô cần Pack (A, B, C, FD)
+                            data["flow_pack_type"] = "P"
+                            pack_type = "P"
+                            prefix = "🅿️ "
+                        else:
+                            # Nếu kéo vào E1, E2, TOP thì xóa flag pack type nếu có và không hiện icon
+                            data.pop("flow_pack_type", None)
+                            prefix = ""
+                    elif self.zone_id == "":
+                        data["urgent"] = "N"
+                        data.pop("flow_pack_type", None)  # Mất flag khi ở cõi tạm
+                        prefix = ""
+                    else:
+                        prefix = "🔥 " if data.get("urgent") == "Y" else ""
+                        data.pop("flow_pack_type", None)
 
-                    prefix = "🔥 " if data.get("urgent") == "Y" else ""
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
                     taken_item.setData(Qt.UserRole, data)
 
@@ -986,14 +1030,6 @@ class MainWindow(QMainWindow):
             "D-1": False
         }
 
-        self.current_ahm_states = {
-            "COT1_18_23": False,
-            "COT1_00_04": False,
-            "COT2_04_10": False,
-            "COT3_10_14": False,
-            "COT4_14_18": False
-        }
-
         self.init_ui()
         self.setWindowState(Qt.WindowMaximized)
         self.start_initialization()
@@ -1015,12 +1051,7 @@ class MainWindow(QMainWindow):
             "Block E": self.txt_cfg_e.text().strip(),
             "NDD": self.toggle_ndd.isChecked(),
             "After-NDD": self.toggle_andd.isChecked(),
-            "D-1": self.toggle_d1.isChecked(),
-            "COT1_18_23": self.toggle_cot1_18.isChecked(),
-            "COT1_00_04": self.toggle_cot1_00.isChecked(),
-            "COT2_04_10": self.toggle_cot2_04.isChecked(),
-            "COT3_10_14": self.toggle_cot3_10.isChecked(),
-            "COT4_14_18": self.toggle_cot4_14.isChecked()
+            "D-1": self.toggle_d1.isChecked()
         }
 
     def init_ui(self):
@@ -1212,42 +1243,10 @@ class MainWindow(QMainWindow):
             config_layout.addWidget(lbl, 6 + idx, 0)
             config_layout.addWidget(toggle_widget, 6 + idx, 1)
 
-        # --- AHM DYNAMIC CONFIG ---
-        lbl_ahm_title = QLabel("⚡ AHM Dynamic")
-        lbl_ahm_title.setStyleSheet(
-            f"font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; color: #D946EF; border: none; margin-top: 4px;")
-        config_layout.addWidget(lbl_ahm_title, 9, 0, 1, 2)
-
-        self.toggle_cot1_18 = ToggleSwitch()
-        self.toggle_cot1_00 = ToggleSwitch()
-        self.toggle_cot2_04 = ToggleSwitch()
-        self.toggle_cot3_10 = ToggleSwitch()
-        self.toggle_cot4_14 = ToggleSwitch()
-
-        self.toggle_cot1_18.clicked.connect(lambda: self.on_ahm_toggle_changed("COT1_18_23"))
-        self.toggle_cot1_00.clicked.connect(lambda: self.on_ahm_toggle_changed("COT1_00_04"))
-        self.toggle_cot2_04.clicked.connect(lambda: self.on_ahm_toggle_changed("COT2_04_10"))
-        self.toggle_cot3_10.clicked.connect(lambda: self.on_ahm_toggle_changed("COT3_10_14"))
-        self.toggle_cot4_14.clicked.connect(lambda: self.on_ahm_toggle_changed("COT4_14_18"))
-
-        ahm_items = [
-            ("[COT 1] 18:00 - 23:59:", self.toggle_cot1_18),
-            ("[COT 1] 00:00 - 04:00:", self.toggle_cot1_00),
-            ("[COT 2] 04:00 - 10:30:", self.toggle_cot2_04),
-            ("[COT 3] 10:30 - 14:30:", self.toggle_cot3_10),
-            ("[COT 4] 14:30 - 18:00:", self.toggle_cot4_14)
-        ]
-
-        for idx, (lbl_text, toggle_widget) in enumerate(ahm_items):
-            lbl = QLabel(lbl_text)
-            lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
-            config_layout.addWidget(lbl, 10 + idx, 0)
-            config_layout.addWidget(toggle_widget, 10 + idx, 1)
-
         self.btn_edit_config = QPushButton("Chỉnh sửa")
         self.btn_edit_config.setStyleSheet("margin-top: 8px;")
         self.btn_edit_config.clicked.connect(self.toggle_config_edit)
-        config_layout.addWidget(self.btn_edit_config, 16, 0, 1, 2)
+        config_layout.addWidget(self.btn_edit_config, 10, 0, 1, 2)
 
         normal_grid.addWidget(config_frame, 0, 4, 2, 1)
 
@@ -1315,7 +1314,17 @@ class MainWindow(QMainWindow):
                 wms_id_search = wms_id.lower()
                 user_id_search = user_id.lower()
 
-                prefix = "🔥 " if data.get("urgent") == "Y" else ""
+                # Cập nhật logic hiển thị icon tại đây để bao phủ cả 2 tab Normal và Flow
+                block = data.get("block", "")
+                if block in FLOW_ZONES:
+                    if block in FLOW_NO_PACK_ZONES:
+                        prefix = ""
+                    else:
+                        pack_type = data.get("flow_pack_type", "P")
+                        prefix = "🅿️ " if pack_type == "P" else "🅱️ "
+                else:
+                    prefix = "🔥 " if data.get("urgent") == "Y" else ""
+
                 base_text = f'{prefix}{name_raw} - {wms_id}'
 
                 if search_term and (
@@ -1400,56 +1409,7 @@ class MainWindow(QMainWindow):
             self.lbl_status.setText(f"⚡ Đang cấu hình {len(rules_to_update)} Wave Rules song song...")
             self.lbl_status.setStyleSheet("color: #9333EA;")
 
-    def on_ahm_toggle_changed(self, changed_toggle_name):
-        new_states = {
-            "COT1_18_23": self.toggle_cot1_18.isChecked(),
-            "COT1_00_04": self.toggle_cot1_00.isChecked(),
-            "COT2_04_10": self.toggle_cot2_04.isChecked(),
-            "COT3_10_14": self.toggle_cot3_10.isChecked(),
-            "COT4_14_18": self.toggle_cot4_14.isChecked()
-        }
-
-        if new_states[changed_toggle_name] is True:
-            for k in new_states:
-                if k != changed_toggle_name:
-                    new_states[k] = False
-
-        self.toggle_cot1_18.blockSignals(True)
-        self.toggle_cot1_00.blockSignals(True)
-        self.toggle_cot2_04.blockSignals(True)
-        self.toggle_cot3_10.blockSignals(True)
-        self.toggle_cot4_14.blockSignals(True)
-
-        self.toggle_cot1_18.setChecked(new_states["COT1_18_23"])
-        self.toggle_cot1_00.setChecked(new_states["COT1_00_04"])
-        self.toggle_cot2_04.setChecked(new_states["COT2_04_10"])
-        self.toggle_cot3_10.setChecked(new_states["COT3_10_14"])
-        self.toggle_cot4_14.setChecked(new_states["COT4_14_18"])
-
-        self.toggle_cot1_18.blockSignals(False)
-        self.toggle_cot1_00.blockSignals(False)
-        self.toggle_cot2_04.blockSignals(False)
-        self.toggle_cot3_10.blockSignals(False)
-        self.toggle_cot4_14.blockSignals(False)
-
-        rules_to_update = {}
-        for k, v in new_states.items():
-            if v != self.current_ahm_states[k]:
-                status_int = 1 if v else 0
-                for rule_id in AHM_DYNAMIC_RULES[k]:
-                    rules_to_update[rule_id] = status_int
-
-        self.current_ahm_states = new_states.copy()
-
-        config_data = self.get_current_config()
-        self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
-
-        if rules_to_update:
-            api_thread = WMSUpdateWaveRuleThread(self.wms_cookie, rules_to_update)
-            api_thread.finished_update.connect(self.on_wave_rules_updated)
-            self.start_thread(api_thread)
-            self.lbl_status.setText(f"⚡ Đang cấu hình {len(rules_to_update)} AHM Wave Rules song song...")
-            self.lbl_status.setStyleSheet("color: #D946EF;")
+    # --- LOẠI BỎ on_ahm_toggle_changed ---
 
     @pyqtSlot(int, int)
     def on_wave_rules_updated(self, success_count, total_count):
@@ -1606,10 +1566,16 @@ class MainWindow(QMainWindow):
                     b_dict["normal"].setText(f"Normal\n📦 Wave: {t_norm}\n⚡ Auto: {d_norm}")
                     b_dict["urgent"].setText(f"Hỏa Tốc\n🔥 Wave: {t_urg}\n⚡ Auto: {d_urg}")
                 elif z_id in FLOW_ZONES:
-                    f_data = self.flow_task_counts.get(z_id, {"normal": 0})
-                    f_norm = f_data.get("normal", 0) if isinstance(f_data, dict) else 0
-                    if "flow" in b_dict:
-                        b_dict["flow"].setText(f"📦 {f_norm}")
+                    f_data = self.flow_task_counts.get(z_id, {"P": 0, "B": 0, "Other": 0})
+                    if z_id in FLOW_NO_PACK_ZONES:
+                        f_qty = f_data.get("Other", 0)
+                        if "flow" in b_dict:
+                            b_dict["flow"].setText(f"📦 {f_qty}")
+                    else:
+                        f_p = f_data.get("P", 0)
+                        f_b = f_data.get("B", 0)
+                        if "flow" in b_dict:
+                            b_dict["flow"].setText(f"🅿️ {f_p} | 🅱️ {f_b}")
 
         if hasattr(self, 'btn_tab_normal'):
             self.btn_tab_normal.setText(f"🎯 PICK NORMAL (👤 Tổng: {total_normal})")
@@ -1652,6 +1618,7 @@ class MainWindow(QMainWindow):
         if uid in self.current_firebase_data:
             data["block"] = self.current_firebase_data[uid].get("block", "")
             data["urgent"] = self.current_firebase_data[uid].get("urgent", "N")
+            data["flow_pack_type"] = self.current_firebase_data[uid].get("flow_pack_type", "P")
         self.current_firebase_data[uid] = data
         for lb in self.listboxes.values():
             for i in range(lb.count()):
@@ -1696,13 +1663,29 @@ class MainWindow(QMainWindow):
         if not isinstance(data, dict): return
 
         if not data.get("block"):
-            QMessageBox.warning(self, "Cảnh báo", "Không thể gán Hỏa Tốc trong Cõi Tạm!")
+            QMessageBox.warning(self, "Cảnh báo", "Không thể thao tác Hỏa Tốc hoặc Pack Type trong Cõi Tạm!")
             return
 
         if data.get("block") in FLOW_ZONES:
-            QMessageBox.warning(self, "Cảnh báo", "Flow Pick không hỗ trợ tính năng gán đơn Hỏa Tốc!")
+            if data.get("block") in FLOW_NO_PACK_ZONES:
+                QMessageBox.warning(self, "Cảnh báo", "Vùng này không hỗ trợ Pack Type!")
+                return
+
+            # Ở Flow Pick: Đổi qua lại giữa Pouch (P) và Box (B)
+            current_pack = data.get("flow_pack_type", "P")
+            data["flow_pack_type"] = "B" if current_pack == "P" else "P"
+            item.setData(Qt.UserRole, data)
+
+            self.current_firebase_data[data["user_id"]] = data
+            self.start_thread(FirebaseUpdateThread("PUT", data=data))
+
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
+
+            self.trigger_search_update()
             return
 
+        # Ở Normal Pick: Đổi trạng thái Hỏa Tốc
         data["urgent"] = "Y" if data.get("urgent", "N") == "N" else "N"
         item.setData(Qt.UserRole, data)
 
@@ -1721,11 +1704,17 @@ class MainWindow(QMainWindow):
 
         act_y = None
         act_n = None
+        act_p = None
+        act_b = None
 
         if data.get("block"):
-            if data.get("block") not in FLOW_ZONES:
+            if data.get("block") in FLOW_ZONES:
+                if data.get("block") not in FLOW_NO_PACK_ZONES:
+                    act_p = menu.addAction("🅿️ Gán Pouch")
+                    act_b = menu.addAction("🅱️ Gán Box")
+            else:
                 act_y = menu.addAction("🔥 Gán Đơn Hỏa Tốc")
-            act_n = menu.addAction("👤 Gán Đơn Bình Thường")
+                act_n = menu.addAction("👤 Gán Đơn Bình Thường")
             menu.addSeparator()
 
         act_del = menu.addAction("❌ Xóa nhân sự")
@@ -1752,6 +1741,22 @@ class MainWindow(QMainWindow):
 
         elif act_n and action == act_n:
             data["urgent"] = "N"
+            item.setData(Qt.UserRole, data)
+            self.start_thread(FirebaseUpdateThread("PUT", data=data))
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
+            self.trigger_search_update()
+
+        elif act_p and action == act_p:
+            data["flow_pack_type"] = "P"
+            item.setData(Qt.UserRole, data)
+            self.start_thread(FirebaseUpdateThread("PUT", data=data))
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
+            self.trigger_search_update()
+
+        elif act_b and action == act_b:
+            data["flow_pack_type"] = "B"
             item.setData(Qt.UserRole, data)
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
@@ -1794,13 +1799,13 @@ class MainWindow(QMainWindow):
         task_thread.tasks_fetched.connect(self.on_wms_tasks_fetched)
         self.start_thread(task_thread)
 
-        flow_thread = FetchFlowTasksThread(self.wms_cookie, self.get_current_config())
-        flow_thread.tasks_fetched.connect(self.on_flow_tasks_fetched)
-        self.start_thread(flow_thread)
-
         dynamic_thread = FetchDynamicTasksThread(self.wms_cookie, self.get_current_config())
         dynamic_thread.tasks_fetched.connect(self.on_dynamic_tasks_fetched)
         self.start_thread(dynamic_thread)
+
+        flow_thread = FetchFlowTasksThread(self.wms_cookie, self.get_current_config())
+        flow_thread.tasks_fetched.connect(self.on_flow_tasks_fetched)
+        self.start_thread(flow_thread)
 
     @pyqtSlot(dict)
     def on_wms_tasks_fetched(self, counts):
@@ -1854,38 +1859,7 @@ class MainWindow(QMainWindow):
             self.toggle_andd.blockSignals(False)
             self.toggle_d1.blockSignals(False)
 
-            # Update AHM Toggles
-            self.toggle_cot1_18.blockSignals(True)
-            self.toggle_cot1_00.blockSignals(True)
-            self.toggle_cot2_04.blockSignals(True)
-            self.toggle_cot3_10.blockSignals(True)
-            self.toggle_cot4_14.blockSignals(True)
-
-            is_cot1_18 = _parse_bool(config_dict.get("COT1_18_23", False))
-            is_cot1_00 = _parse_bool(config_dict.get("COT1_00_04", False))
-            is_cot2_04 = _parse_bool(config_dict.get("COT2_04_10", False))
-            is_cot3_10 = _parse_bool(config_dict.get("COT3_10_14", False))
-            is_cot4_14 = _parse_bool(config_dict.get("COT4_14_18", False))
-
-            self.toggle_cot1_18.setChecked(is_cot1_18)
-            self.toggle_cot1_00.setChecked(is_cot1_00)
-            self.toggle_cot2_04.setChecked(is_cot2_04)
-            self.toggle_cot3_10.setChecked(is_cot3_10)
-            self.toggle_cot4_14.setChecked(is_cot4_14)
-
-            self.current_ahm_states = {
-                "COT1_18_23": is_cot1_18,
-                "COT1_00_04": is_cot1_00,
-                "COT2_04_10": is_cot2_04,
-                "COT3_10_14": is_cot3_10,
-                "COT4_14_18": is_cot4_14
-            }
-
-            self.toggle_cot1_18.blockSignals(False)
-            self.toggle_cot1_00.blockSignals(False)
-            self.toggle_cot2_04.blockSignals(False)
-            self.toggle_cot3_10.blockSignals(False)
-            self.toggle_cot4_14.blockSignals(False)
+            # Đã loại bỏ đoạn khởi tạo AHM Toggle States
 
         if pickers_dict is None:
             self.lbl_status.setText("❌ Lỗi đồng bộ Firebase!")
