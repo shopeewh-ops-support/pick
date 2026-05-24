@@ -337,19 +337,11 @@ class WMSUpdateRuleThread(QThread):
             if not staff_data_list: return
 
             # Phân tách ID nhân viên để xử lý theo Pack Type nếu ở Flow Pick
-
-        def send_req(staff_ids, is_urg):
-            if not staff_ids: return
-
-            # Xử lý phân tách P/B cho Flow Pick (A1->C3, FD)
             if is_flow and self.target_zone not in FLOW_NO_PACK_ZONES:
-                pouch_staff_ids = [uid for uid in staff_ids if
-                                   next((p.get("flow_pack_type") for p in self.picker_list if p.get("user_id") == uid),
-                                        "") == "P"]
-                box_staff_ids = [uid for uid in staff_ids if
-                                 next((p.get("flow_pack_type") for p in self.picker_list if p.get("user_id") == uid),
-                                      "") == "B"]
+                pouch_staff_ids = [p["user_id"] for p in staff_data_list if p.get("flow_pack_type", "P") == "P"]
+                box_staff_ids = [p["user_id"] for p in staff_data_list if p.get("flow_pack_type") == "B"]
 
+                # Hàm thực hiện POST API cho Flow Pick phân theo Pack Type
                 def send_flow_req(ids, group_id):
                     if not ids: return
                     payload = {
@@ -379,6 +371,8 @@ class WMSUpdateRuleThread(QThread):
                 send_flow_req(box_staff_ids, "VNVLFPOG0135")
                 return
 
+            # Xử lý cho Cõi Tạm, Normal Pick và Flow Pick vùng đặc biệt (E1, E2, TOP)
+            staff_ids = [p["user_id"] for p in staff_data_list]
             payload = {
                 "checkbox_bit_set": 29,
                 "zone_hard_restrict": 1,
@@ -412,6 +406,7 @@ class WMSUpdateRuleThread(QThread):
                 payload["zone_id_list"] = list(normal_zones) if normal_zones else ["SA4"]
                 payload["flow_pick_working_zone_list"] = ["SA4"]
                 payload["channel_id_list"] = ["50033", "50051", "50044"] if is_urg else ["50011", "50021", "50032"]
+                # Đã loại bỏ VNVLFPOG0107
                 payload["flow_pick_order_group_id_list"] = ["VNVLFPOG0053"]
 
             try:
@@ -652,6 +647,7 @@ class FetchFlowTasksThread(QThread):
             "Cookie": self.wms_cookie
         }
 
+        # Lưu số lượng Pouch, Box, Other (VNVLFPOG0117)
         flow_counts = {zone: {"P": 0, "B": 0, "Other": 0} for zone in FLOW_ZONES}
 
         def fetch_group(group_id, key_name):
@@ -701,7 +697,7 @@ class FirebaseUpdateThread(QThread):
                     "block": self.data.get("block", ""),
                     "color": self.data.get("color", "black"),
                     "urgent": self.data.get("urgent", "N"),
-                    "flow_pack_type": self.data.get("flow_pack_type", "")
+                    "flow_pack_type": self.data.get("flow_pack_type", "P")  # Cập nhật Pack Type
                 }
                 url = f"{FIREBASE_PICKER_URL}/{safe_uid}.json"
                 requests.put(url, json=payload, timeout=10)
@@ -895,7 +891,7 @@ class ProcessApiThread(QThread):
                     color_tag = "#DB2777"
 
             result = {"name": emp_name, "wms_id": emp_wmsid, "user_id": emp_userid, "sex": emp_sex, "color": color_tag,
-                      "block": "", "urgent": "N", "flow_pack_type": ""}
+                      "block": "", "urgent": "N", "flow_pack_type": "P"}
             self.result_ready.emit(result)
 
 
@@ -966,17 +962,6 @@ class ZoneListWidget(QListWidget):
             super().dropEvent(event)
             return
 
-        # Kiểm tra trước khi thả vào Flow Pick (trừ E1, E2, TOP) xem đã chọn P/B chưa
-        if self.zone_id in FLOW_ZONES and self.zone_id not in FLOW_NO_PACK_ZONES:
-            for item in source.selectedItems():
-                data = item.data(Qt.UserRole)
-                if isinstance(data, dict):
-                    if data.get("flow_pack_type", "") not in ["P", "B"]:
-                        QMessageBox.warning(self.window(), "Cảnh báo",
-                                            f"Nhân sự {data.get('name')} chưa được chọn Pouch (P) hoặc Box (B).\nVui lòng nhấp đúp để chọn loại đơn ở Cõi Tạm trước khi kéo vào!")
-                        event.ignore()
-                        return
-
         row = self.indexAt(event.pos()).row()
         if row == -1: row = self.count()
 
@@ -988,22 +973,25 @@ class ZoneListWidget(QListWidget):
                 if isinstance(data, dict):
                     data["block"] = self.zone_id
 
+                    # Khởi tạo mặc định nếu thuộc FLOW_ZONES
                     if self.zone_id in FLOW_ZONES:
                         data["urgent"] = "N"
-                        if self.zone_id in FLOW_NO_PACK_ZONES:
-                            data["flow_pack_type"] = ""  # Kéo vào E1, E2, TOP thì mất trạng thái
-                    elif self.zone_id == "":
-                        data["urgent"] = "N"
-
-                    pack_type = data.get("flow_pack_type", "")
-                    prefix = ""
-                    if self.zone_id in FLOW_ZONES:
                         if self.zone_id not in FLOW_NO_PACK_ZONES:
-                            prefix = "🅿️ " if pack_type == "P" else ("🅱️ " if pack_type == "B" else "")
+                            # Luôn set Pouch nếu kéo vào các ô cần Pack (A, B, C, FD)
+                            data["flow_pack_type"] = "P"
+                            pack_type = "P"
+                            prefix = "🅿️ "
+                        else:
+                            # Nếu kéo vào E1, E2, TOP thì xóa flag pack type nếu có và không hiện icon
+                            data.pop("flow_pack_type", None)
+                            prefix = ""
                     elif self.zone_id == "":
-                        prefix = "🅿️ " if pack_type == "P" else ("🅱️ " if pack_type == "B" else "")
+                        data["urgent"] = "N"
+                        data.pop("flow_pack_type", None)  # Mất flag khi ở cõi tạm
+                        prefix = ""
                     else:
                         prefix = "🔥 " if data.get("urgent") == "Y" else ""
+                        data.pop("flow_pack_type", None)
 
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
                     taken_item.setData(Qt.UserRole, data)
@@ -1326,15 +1314,14 @@ class MainWindow(QMainWindow):
                 wms_id_search = wms_id.lower()
                 user_id_search = user_id.lower()
 
+                # Cập nhật logic hiển thị icon tại đây để bao phủ cả 2 tab Normal và Flow
                 block = data.get("block", "")
-                pack_type = data.get("flow_pack_type", "")
-
-                prefix = ""
                 if block in FLOW_ZONES:
-                    if block not in FLOW_NO_PACK_ZONES:
-                        prefix = "🅿️ " if pack_type == "P" else ("🅱️ " if pack_type == "B" else "")
-                elif block == "":
-                    prefix = "🅿️ " if pack_type == "P" else ("🅱️ " if pack_type == "B" else "")
+                    if block in FLOW_NO_PACK_ZONES:
+                        prefix = ""
+                    else:
+                        pack_type = data.get("flow_pack_type", "P")
+                        prefix = "🅿️ " if pack_type == "P" else "🅱️ "
                 else:
                     prefix = "🔥 " if data.get("urgent") == "Y" else ""
 
@@ -1631,7 +1618,7 @@ class MainWindow(QMainWindow):
         if uid in self.current_firebase_data:
             data["block"] = self.current_firebase_data[uid].get("block", "")
             data["urgent"] = self.current_firebase_data[uid].get("urgent", "N")
-            data["flow_pack_type"] = self.current_firebase_data[uid].get("flow_pack_type", "")
+            data["flow_pack_type"] = self.current_firebase_data[uid].get("flow_pack_type", "P")
         self.current_firebase_data[uid] = data
         for lb in self.listboxes.values():
             for i in range(lb.count()):
@@ -1676,27 +1663,29 @@ class MainWindow(QMainWindow):
         if not isinstance(data, dict): return
 
         if not data.get("block"):
-            # Đang ở Cõi Tạm: Đổi qua lại giữa None -> P -> B -> None...
-            current_pack = data.get("flow_pack_type", "")
-            if current_pack == "":
-                data["flow_pack_type"] = "P"
-            elif current_pack == "P":
-                data["flow_pack_type"] = "B"
-            else:
-                data["flow_pack_type"] = ""
+            QMessageBox.warning(self, "Cảnh báo", "Không thể thao tác Hỏa Tốc hoặc Pack Type trong Cõi Tạm!")
+            return
 
+        if data.get("block") in FLOW_ZONES:
+            if data.get("block") in FLOW_NO_PACK_ZONES:
+                QMessageBox.warning(self, "Cảnh báo", "Vùng này không hỗ trợ Pack Type!")
+                return
+
+            # Ở Flow Pick: Đổi qua lại giữa Pouch (P) và Box (B)
+            current_pack = data.get("flow_pack_type", "P")
+            data["flow_pack_type"] = "B" if current_pack == "P" else "P"
             item.setData(Qt.UserRole, data)
+
             self.current_firebase_data[data["user_id"]] = data
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
+
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
 
             self.trigger_search_update()
             return
 
-        if data.get("block") in FLOW_ZONES:
-            QMessageBox.warning(self, "Cảnh báo",
-                                "Không thể đổi loại đơn (P/B) khi đang ở Flow Pick. Bạn phải kéo nhân sự về Cõi Tạm để đổi!")
-            return
-
+        # Ở Normal Pick: Đổi trạng thái Hỏa Tốc
         data["urgent"] = "Y" if data.get("urgent", "N") == "N" else "N"
         item.setData(Qt.UserRole, data)
 
@@ -1717,17 +1706,15 @@ class MainWindow(QMainWindow):
         act_n = None
         act_p = None
         act_b = None
-        act_clear = None
 
-        if not data.get("block"):
-            # Ở Cõi Tạm
-            act_p = menu.addAction("🅿️ Gán Pouch")
-            act_b = menu.addAction("🅱️ Gán Box")
-            act_clear = menu.addAction("❌ Hủy gán P/B")
-            menu.addSeparator()
-        elif data.get("block") not in FLOW_ZONES:
-            act_y = menu.addAction("🔥 Gán Đơn Hỏa Tốc")
-            act_n = menu.addAction("👤 Gán Đơn Bình Thường")
+        if data.get("block"):
+            if data.get("block") in FLOW_ZONES:
+                if data.get("block") not in FLOW_NO_PACK_ZONES:
+                    act_p = menu.addAction("🅿️ Gán Pouch")
+                    act_b = menu.addAction("🅱️ Gán Box")
+            else:
+                act_y = menu.addAction("🔥 Gán Đơn Hỏa Tốc")
+                act_n = menu.addAction("👤 Gán Đơn Bình Thường")
             menu.addSeparator()
 
         act_del = menu.addAction("❌ Xóa nhân sự")
@@ -1764,18 +1751,16 @@ class MainWindow(QMainWindow):
             data["flow_pack_type"] = "P"
             item.setData(Qt.UserRole, data)
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
             self.trigger_search_update()
 
         elif act_b and action == act_b:
             data["flow_pack_type"] = "B"
             item.setData(Qt.UserRole, data)
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            self.trigger_search_update()
-
-        elif act_clear and action == act_clear:
-            data["flow_pack_type"] = ""
-            item.setData(Qt.UserRole, data)
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
             self.trigger_search_update()
 
     def delete_selected_items(self):
