@@ -730,7 +730,7 @@ class InitDataThread(QThread):
                     if len(row) >= 8:
                         cached_data.append({
                             "UserID": row[0], "WMSID": row[1], "Email": row[2],
-                            "Name": row[6], "Sex": row[7]
+                            "Name": row[4], "Sex": row[5]
                         })
             self.finished_signal.emit(cached_data, wfm_cookie, wms_cookie)
         except Exception as e:
