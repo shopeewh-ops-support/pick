@@ -755,13 +755,39 @@ class InitDataThread(QThread):
             SHEET_ID = '1WZVgl1L86F75YVRqP4N8n2E3-K6AJCup6hKnVu3-0rE'
             worksheet = client.open_by_key(SHEET_ID).worksheet('Infomation_laborer/employee')
             all_data = worksheet.get_all_values()
+
+            if len(all_data) > 0:
+                print(f"[DEBUG] Google Sheet Headers: {all_data[0]}")
+                print(f"[DEBUG] Tổng số dòng thô đọc từ Google Sheet (kèm headers): {len(all_data)}")
+                if len(all_data) > 1:
+                    print(f"[DEBUG] Dòng đầu tiên của dữ liệu thô: {all_data[1]}")
+                    print(f"[DEBUG] Số lượng cột của dòng dữ liệu thô đầu tiên: {len(all_data[1])}")
+
             if len(all_data) > 1:
                 for row in all_data[1:]:
-                    if len(row) >= 8:
-                        cached_data.append({
-                            "UserID": row[0], "WMSID": row[1], "Email": row[2],
-                            "Name": row[4], "Sex": row[5]
-                        })
+                    # Bù đắp số lượng cột trống nếu dòng bị thiếu để tránh IndexError (đọc index 5)
+                    # Cách khắc phục loại bỏ len(row) >= 8 làm lọc mất toàn bộ dòng
+                    while len(row) < 6:
+                        row.append("")
+
+                    user_id = str(row[0]).strip()
+                    wms_id = str(row[1]).strip()
+
+                    # Bỏ qua các dòng hoàn toàn trống
+                    if not user_id and not wms_id:
+                        continue
+
+                    cached_data.append({
+                        "UserID": user_id,
+                        "WMSID": wms_id,
+                        "Email": str(row[2]).strip(),
+                        "Name": str(row[4]).strip(),
+                        "Sex": str(row[5]).strip()
+                    })
+                print(f"[DEBUG] Tổng số dòng dữ liệu hợp lệ đọc được: {len(cached_data)}")
+                if len(cached_data) > 0:
+                    print(f"[DEBUG] Mẫu nhân sự đầu tiên được tải thành công: {cached_data[0]}")
+
             self.finished_signal.emit(cached_data, wfm_cookie, wms_cookie)
         except Exception as e:
             self.error_signal.emit(str(e))
@@ -812,9 +838,16 @@ class ProcessApiThread(QThread):
             for emp in self.cached_data:
                 if (id_type == "wms" and emp["WMSID"] == scanned_id) or \
                         (id_type == "user" and emp["UserID"].upper() == scanned_id):
-                    emp_name, emp_sex, emp_wmsid, emp_userid, emp_email = emp["Name"], str(emp["Sex"]).strip().lower(), \
-                        emp["WMSID"], emp["UserID"].upper(), emp.get("Email", "")
+                    emp_name = emp["Name"]
+                    emp_sex = emp["Sex"]
+                    emp_wmsid = emp["WMSID"]
+                    emp_userid = emp["UserID"].upper()
+                    emp_email = emp.get("Email", "")
+                    print(
+                        f"[DEBUG] TÌM THẤY '{scanned_id}' TRONG SHEET -> Tên: '{emp_name}', Giới tính (gốc): '{emp_sex}'")
                     break
+            else:
+                print(f"[DEBUG] KHÔNG TÌM THẤY '{scanned_id}' TRONG GG SHEET!")
 
             wfm_success = wms_success = False
 
@@ -878,12 +911,14 @@ class ProcessApiThread(QThread):
                 except Exception as e:
                     pass
 
-            color_tag = "#1E293B"
-            if wfm_success and wms_success:
-                if emp_sex in ["nam", "m", "male"]:
-                    color_tag = "#2563EB"
-                elif emp_sex in ["nữ", "nu", "f", "female"]:
-                    color_tag = "#DB2777"
+            # Chuẩn hóa giới tính: loại bỏ dấu, xóa khoảng trắng 2 đầu và chuyển về chữ thường
+            safe_sex = remove_accents(str(emp_sex)).strip().lower()
+
+            color_tag = "#1E293B"  # Mặc định Xám đen
+            if safe_sex in ["nam", "m", "male"]:
+                color_tag = "#2563EB"  # Xanh dương cho Nam
+            elif safe_sex in ["nu", "f", "female"]:
+                color_tag = "#DB2777"  # Hồng cho Nữ
 
             result = {"name": emp_name, "wms_id": emp_wmsid, "user_id": emp_userid, "sex": emp_sex, "color": color_tag,
                       "block": "", "urgent": "N", "flow_pack_type": ""}
@@ -1000,7 +1035,7 @@ class ZoneListWidget(QListWidget):
                         elif urg == "A":
                             prefix = "🅰️ "
                         elif urg == "S":
-                            prefix = "✅ "
+                            prefix = "Ⓜ️ "
 
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
                     taken_item.setData(Qt.UserRole, data)
@@ -1339,7 +1374,7 @@ class MainWindow(QMainWindow):
                     elif urg == "A":
                         prefix = "🅰️ "
                     elif urg == "S":
-                        prefix = "✅ "
+                        prefix = "Ⓜ️ "
 
                 base_text = f'{prefix}{name_raw} - {wms_id}'
 
@@ -1499,7 +1534,7 @@ class MainWindow(QMainWindow):
                 )
                 lbl_normal.setAlignment(Qt.AlignCenter)
 
-                lbl_urgent = QLabel("Hỏa Tốc\n🅰️ AHM: 0\n✅ SDD: 0\n Cả hai: 0")
+                lbl_urgent = QLabel("Hỏa Tốc\n🅰️ AHM: 0\n🪼 SDD: 0\n📦 Oth: 0")
                 lbl_urgent.setStyleSheet(
                     f"background-color: #FFFFFF; color: #EF4444; font-weight: 600; border: 1px solid #FECACA; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
                 )
@@ -1578,7 +1613,7 @@ class MainWindow(QMainWindow):
                     t_oth = task_data.get("oth", 0) + dyn_data.get("oth", 0)
 
                     b_dict["normal"].setText(f"Normal\n📦 Wave: {t_norm}\n⚡ Auto: {d_norm}")
-                    b_dict["urgent"].setText(f"Hỏa Tốc\n🅰️ AHM: {t_ahm}\n✅ SDD: {t_sdd}\nCả hai: {t_oth}")
+                    b_dict["urgent"].setText(f"Hỏa Tốc\n🅰️ AHM: {t_ahm}\n🪼 SDD: {t_sdd}\n📦 Cả 2: {t_oth}")
                 elif z_id in FLOW_ZONES:
                     f_data = self.flow_task_counts.get(z_id, {"P": 0, "B": 0, "Other": 0})
                     if z_id in FLOW_NO_PACK_ZONES:
@@ -1742,9 +1777,9 @@ class MainWindow(QMainWindow):
             # Block Pick Normal
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
             menu.addSeparator()
-            act_y = menu.addAction("🔥 Gán Hỏa Tốc (Tất Cả)")
-            act_a = menu.addAction("🅰️ Gán Hỏa Tốc (Chỉ AHM)")
-            act_s = menu.addAction("✅ Gán Hỏa Tốc (Chỉ SDD)")
+            act_y = menu.addAction("🔥 Gán Cả 2")
+            act_a = menu.addAction("🅰️ Gán AHM")
+            act_s = menu.addAction("🪼 Gán SDD")
             menu.addSeparator()
 
         act_del = menu.addAction("❌ Xóa nhân sự")
