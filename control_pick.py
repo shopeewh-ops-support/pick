@@ -24,7 +24,8 @@ from google.oauth2.service_account import Credentials
 # =========================================================================
 WAVE_RULE_GROUPS = {
     "NDD": ["VNVLDWR0125", "VNVLDWR0126", "VNVLDWR0127", "VNVLDWR0128", "VNVLDWR0129", "VNVLDWR0130",
-            "VNVLDWR0131", "VNVLDWR0132", "VNVLDWR0133", "VNVLDWR0134", "VNVLDWR0135", "VNVLDWR0136", "VNVLDWR0137", "VNVLDWR0138", "VNVLDWR0139", "VNVLDWR0140", "VNVLDWR0141", "VNVLDWR0142", "VNVLDWR0143"],
+            "VNVLDWR0131", "VNVLDWR0132", "VNVLDWR0133", "VNVLDWR0134", "VNVLDWR0135", "VNVLDWR0136", "VNVLDWR0137",
+            "VNVLDWR0138", "VNVLDWR0139", "VNVLDWR0140", "VNVLDWR0141", "VNVLDWR0142", "VNVLDWR0143"],
     "After-NDD": ["VNVLDWR0032", "VNVLDWR0034", "VNVLDWR0035", "VNVLDWR0036", "VNVLDWR0037",
                   "VNVLDWR0038",
                   "VNVLDWR0039", "VNVLDWR0040"],
@@ -210,7 +211,7 @@ class ToggleSwitch(QPushButton):
         rect = QRect(0, 0, self.width(), self.height())
         # Vẽ nền
         if self.isChecked():
-            painter.setBrush(QColor("#4ADE80"))  # Xanh lá giống ảnh
+            painter.setBrush(QColor("#4ADE80"))  # Xanh lá
         else:
             painter.setBrush(QColor("#E2E8F0"))  # Xám
 
@@ -356,19 +357,21 @@ class WMSUpdateRuleThread(QThread):
             except Exception as e:
                 print(f"[DEBUG][WMS Update Rule] Lỗi API Request: {e}")
 
-        # Phân tách ID nhân sự
-        urgent_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "Y"]
-        normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") != "Y"]
+        # Phân loại trạng thái "urgent" (Y = Tất cả, A = AHM, S = SDD, N = Normal)
+        urgent_all_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "Y"]
+        urgent_ahm_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "A"]
+        urgent_sdd_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "S"]
+        normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") in ["N", "", None]]
 
         if is_none:
             # Ở Cõi Tạm (Reset mọi thứ)
-            all_staff = urgent_staff + normal_staff
+            all_staff = urgent_all_staff + urgent_ahm_staff + urgent_sdd_staff + normal_staff
             do_post(all_staff, ["SA4"], ["SA4"], ["50011", "50021", "50032"], ["VNVLFPOG0053"])
 
         elif is_flow:
             if self.target_zone in FLOW_NO_PACK_ZONES:
                 # E1, E2, TOP - Dùng nhóm 0117
-                all_staff = urgent_staff + normal_staff
+                all_staff = urgent_all_staff + urgent_ahm_staff + urgent_sdd_staff + normal_staff
                 do_post(all_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0117"])
             else:
                 # Flow Pick (Cần tách riêng Pouch và Box)
@@ -384,8 +387,10 @@ class WMSUpdateRuleThread(QThread):
             target_z_list = list(normal_zones) if normal_zones else ["SA4"]
             # Bắn cho đơn thường
             do_post(normal_staff, target_z_list, ["SA4"], ["50011", "50021", "50032"], ["VNVLFPOG0053"])
-            # Bắn cho đơn hỏa tốc (Khác biệt ở channel ID)
-            do_post(urgent_staff, target_z_list, ["SA4"], ["50033", "50051", "50044"], ["VNVLFPOG0053"])
+            # Bắn cho đơn hỏa tốc theo loại
+            do_post(urgent_all_staff, target_z_list, ["SA4"], ["50033", "50051", "50044"], ["VNVLFPOG0053"])
+            do_post(urgent_ahm_staff, target_z_list, ["SA4"], ["50033", "50044"], ["VNVLFPOG0053"])
+            do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50051"], ["VNVLFPOG0053"])
 
 
 class FetchTasksThread(QThread):
@@ -401,7 +406,8 @@ class FetchTasksThread(QThread):
             self.tasks_fetched.emit({})
             return
 
-        counts = {block: {"normal": 0, "urgent": 0} for block in NORMAL_BLOCKS}
+        # Khởi tạo dict chứa các biến đếm Normal, AHM, SDD, Other
+        counts = {block: {"normal": 0, "ahm": 0, "sdd": 0, "oth": 0} for block in NORMAL_BLOCKS}
 
         cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
         cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
@@ -428,10 +434,11 @@ class FetchTasksThread(QThread):
         }
         url = "https://wms.ssc.shopee.vn/api/v2/apps/process/taskcenter/pickingtask/search_sales_sub_picking_task"
 
-        def fetch_tasks(channel_ids, task_type):
-            all_tasks = []
-            pageno = 1
+        all_tasks = []
+        pageno = 1
 
+        try:
+            # Gọi API 1 LẦN DUY NHẤT để lấy tất cả (không lọc channel_id trong payload)
             while True:
                 payload = {
                     "start_time": start_ts,
@@ -441,8 +448,7 @@ class FetchTasksThread(QThread):
                     "is_add_picking": 0,
                     "fulfillment_chain_dest_zone_list": [],
                     "pageno": pageno,
-                    "count": 200,
-                    "channel_id": channel_ids
+                    "count": 200
                 }
 
                 res = requests.post(url, json=payload, headers=headers, timeout=10)
@@ -459,7 +465,23 @@ class FetchTasksThread(QThread):
                     break
                 pageno += 1
 
+            # Phân loại logic bằng channel_id_list trả về trong dữ liệu Task
             for task in all_tasks:
+                channels = set(str(c) for c in task.get("channel_id_list", []))
+
+                has_ahm = bool(channels & {"50033", "50044"})
+                has_sdd = bool(channels & {"50051"})
+
+                # Phân loại task
+                if has_ahm and has_sdd:
+                    task_type = "oth"
+                elif has_ahm:
+                    task_type = "ahm"
+                elif has_sdd:
+                    task_type = "sdd"
+                else:
+                    task_type = "normal"
+
                 z_str = task.get("zone_list", "")
                 t_zones = set([z.strip() for z in z_str.split(",") if z.strip()])
 
@@ -485,9 +507,6 @@ class FetchTasksThread(QThread):
                 elif has_e:
                     counts["Block E"][task_type] += 1
 
-        try:
-            fetch_tasks("50011,50021,50032", "normal")
-            fetch_tasks("50033,50051,50044", "urgent")
             self.tasks_fetched.emit(counts)
         except Exception as e:
             print(f"[DEBUG][WMS Tasks] Exception Lỗi Code: {e}")
@@ -507,7 +526,7 @@ class FetchDynamicTasksThread(QThread):
             self.tasks_fetched.emit({})
             return
 
-        counts = {block: {"normal": set(), "urgent": set()} for block in NORMAL_BLOCKS}
+        counts = {block: {"normal": set(), "ahm": set(), "sdd": set(), "oth": set()} for block in NORMAL_BLOCKS}
 
         cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
         cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
@@ -548,9 +567,18 @@ class FetchDynamicTasksThread(QThread):
                     if not pickup_id:
                         continue
 
-                    channel_ids = set(task.get("channel_id_list", []))
-                    is_urgent = bool(channel_ids & {"50033", "50051", "50044"})
-                    task_type = "urgent" if is_urgent else "normal"
+                    channels = set(str(c) for c in task.get("channel_id_list", []))
+                    has_ahm = bool(channels & {"50033", "50044"})
+                    has_sdd = bool(channels & {"50051"})
+
+                    if has_ahm and has_sdd:
+                        task_type = "oth"
+                    elif has_ahm:
+                        task_type = "ahm"
+                    elif has_sdd:
+                        task_type = "sdd"
+                    else:
+                        task_type = "normal"
 
                     z_str = task.get("zone_list", "")
                     t_zones = set([z.strip() for z in z_str.split(",") if z.strip()])
@@ -581,7 +609,9 @@ class FetchDynamicTasksThread(QThread):
                     break
                 pageno += 1
 
-            final_counts = {k: {"normal": len(v["normal"]), "urgent": len(v["urgent"])} for k, v in counts.items()}
+            final_counts = {
+                k: {"normal": len(v["normal"]), "ahm": len(v["ahm"]), "sdd": len(v["sdd"]), "oth": len(v["oth"])} for
+                k, v in counts.items()}
             self.tasks_fetched.emit(final_counts)
 
         except Exception as e:
@@ -964,7 +994,13 @@ class ZoneListWidget(QListWidget):
                     elif self.zone_id == "":
                         prefix = "🅿️ " if pack_type == "P" else ("🅱️ " if pack_type == "B" else "")
                     else:
-                        prefix = "🔥 " if data.get("urgent") == "Y" else ""
+                        urg = data.get("urgent", "N")
+                        if urg == "Y":
+                            prefix = "🔥 "
+                        elif urg == "A":
+                            prefix = "🅰️ "
+                        elif urg == "S":
+                            prefix = "✅ "
 
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
                     taken_item.setData(Qt.UserRole, data)
@@ -1297,7 +1333,13 @@ class MainWindow(QMainWindow):
                 elif block == "":
                     prefix = "🅿️ " if pack_type == "P" else ("🅱️ " if pack_type == "B" else "")
                 else:
-                    prefix = "🔥 " if data.get("urgent") == "Y" else ""
+                    urg = data.get("urgent", "N")
+                    if urg == "Y":
+                        prefix = "🔥 "
+                    elif urg == "A":
+                        prefix = "🅰️ "
+                    elif urg == "S":
+                        prefix = "✅ "
 
                 base_text = f'{prefix}{name_raw} - {wms_id}'
 
@@ -1457,13 +1499,12 @@ class MainWindow(QMainWindow):
                 )
                 lbl_normal.setAlignment(Qt.AlignCenter)
 
-                lbl_urgent = QLabel("Hỏa Tốc\n🔥 Urg: 0\n⚡ Auto: 0")
+                lbl_urgent = QLabel("Hỏa Tốc\n🅰️ AHM: 0\n✅ SDD: 0\n Cả hai: 0")
                 lbl_urgent.setStyleSheet(
                     f"background-color: #FFFFFF; color: #EF4444; font-weight: 600; border: 1px solid #FECACA; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
                 )
                 lbl_urgent.setAlignment(Qt.AlignCenter)
 
-                # Dùng stretch để đẩy Normal qua trái, Hỏa Tốc qua phải, People tự động ở giữa
                 h_layout.addWidget(lbl_normal)
                 h_layout.addStretch()
                 h_layout.addWidget(lbl_people)
@@ -1526,17 +1567,18 @@ class MainWindow(QMainWindow):
                 b_dict["people"].setText(f"👤 {people_count}")
 
                 if z_id in NORMAL_BLOCKS:
-                    task_data = self.task_counts.get(z_id, {"normal": 0, "urgent": 0})
-                    dyn_data = self.dynamic_task_counts.get(z_id, {"normal": 0, "urgent": 0})
+                    task_data = self.task_counts.get(z_id, {"normal": 0, "ahm": 0, "sdd": 0, "oth": 0})
+                    dyn_data = self.dynamic_task_counts.get(z_id, {"normal": 0, "ahm": 0, "sdd": 0, "oth": 0})
 
                     t_norm = task_data.get("normal", 0)
-                    t_urg = task_data.get("urgent", 0)
-
                     d_norm = dyn_data.get("normal", 0)
-                    d_urg = dyn_data.get("urgent", 0)
+
+                    t_ahm = task_data.get("ahm", 0) + dyn_data.get("ahm", 0)
+                    t_sdd = task_data.get("sdd", 0) + dyn_data.get("sdd", 0)
+                    t_oth = task_data.get("oth", 0) + dyn_data.get("oth", 0)
 
                     b_dict["normal"].setText(f"Normal\n📦 Wave: {t_norm}\n⚡ Auto: {d_norm}")
-                    b_dict["urgent"].setText(f"Hỏa Tốc\n🔥 Wave: {t_urg}\n⚡ Auto: {d_urg}")
+                    b_dict["urgent"].setText(f"Hỏa Tốc\n🅰️ AHM: {t_ahm}\n✅ SDD: {t_sdd}\nCả hai: {t_oth}")
                 elif z_id in FLOW_ZONES:
                     f_data = self.flow_task_counts.get(z_id, {"P": 0, "B": 0, "Other": 0})
                     if z_id in FLOW_NO_PACK_ZONES:
@@ -1656,7 +1698,17 @@ class MainWindow(QMainWindow):
                                 "Không thể đổi loại đơn (P/B) khi đang ở Flow Pick. Bạn phải kéo nhân sự về Cõi Tạm để đổi!")
             return
 
-        data["urgent"] = "Y" if data.get("urgent", "N") == "N" else "N"
+        # Ở Block Normal: Đổi vòng trạng thái (Normal -> All -> AHM -> SDD -> Normal)
+        urgent_state = data.get("urgent", "N")
+        if urgent_state == "N":
+            data["urgent"] = "Y"  # Tất cả
+        elif urgent_state == "Y":
+            data["urgent"] = "A"  # AHM
+        elif urgent_state == "A":
+            data["urgent"] = "S"  # SDD
+        else:
+            data["urgent"] = "N"  # Normal
+
         item.setData(Qt.UserRole, data)
 
         self.current_firebase_data[data["user_id"]] = data
@@ -1673,6 +1725,8 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
 
         act_y = None
+        act_a = None
+        act_s = None
         act_n = None
         act_p = None
         act_b = None
@@ -1685,8 +1739,12 @@ class MainWindow(QMainWindow):
             act_clear = menu.addAction("❌ Hủy gán P/B")
             menu.addSeparator()
         elif data.get("block") not in FLOW_ZONES:
-            act_y = menu.addAction("🔥 Gán Đơn Hỏa Tốc")
+            # Block Pick Normal
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
+            menu.addSeparator()
+            act_y = menu.addAction("🔥 Gán Hỏa Tốc (Tất Cả)")
+            act_a = menu.addAction("🅰️ Gán Hỏa Tốc (Chỉ AHM)")
+            act_s = menu.addAction("✅ Gán Hỏa Tốc (Chỉ SDD)")
             menu.addSeparator()
 
         act_del = menu.addAction("❌ Xóa nhân sự")
@@ -1705,6 +1763,22 @@ class MainWindow(QMainWindow):
 
         elif act_y and action == act_y:
             data["urgent"] = "Y"
+            item.setData(Qt.UserRole, data)
+            self.start_thread(FirebaseUpdateThread("PUT", data=data))
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
+            self.trigger_search_update()
+
+        elif act_a and action == act_a:
+            data["urgent"] = "A"
+            item.setData(Qt.UserRole, data)
+            self.start_thread(FirebaseUpdateThread("PUT", data=data))
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
+            self.trigger_search_update()
+
+        elif act_s and action == act_s:
+            data["urgent"] = "S"
             item.setData(Qt.UserRole, data)
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
