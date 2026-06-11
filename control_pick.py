@@ -1534,7 +1534,7 @@ class MainWindow(QMainWindow):
                 )
                 lbl_normal.setAlignment(Qt.AlignCenter)
 
-                lbl_urgent = QLabel("Hỏa Tốc\n🅰️ AHM: 0\n⚡ SDD: 0\n📦 Oth: 0")
+                lbl_urgent = QLabel("Hỏa Tốc\n🅰️ AHM: 0\n🪼 SDD: 0\n📦 Cả 2: 0")
                 lbl_urgent.setStyleSheet(
                     f"background-color: #FFFFFF; color: #EF4444; font-weight: 600; border: 1px solid #FECACA; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
                 )
@@ -1613,7 +1613,7 @@ class MainWindow(QMainWindow):
                     t_oth = task_data.get("oth", 0) + dyn_data.get("oth", 0)
 
                     b_dict["normal"].setText(f"Normal\n📦 Wave: {t_norm}\n⚡ Auto: {d_norm}")
-                    b_dict["urgent"].setText(f"Hỏa Tốc\n🅰️ AHM: {t_ahm}\n⚡ SDD: {t_sdd}\n📦 Oth: {t_oth}")
+                    b_dict["urgent"].setText(f"Hỏa Tốc\n🅰️ AHM: {t_ahm}\n🪼 SDD: {t_sdd}\n📦 Cả 2: {t_oth}")
                 elif z_id in FLOW_ZONES:
                     f_data = self.flow_task_counts.get(z_id, {"P": 0, "B": 0, "Other": 0})
                     if z_id in FLOW_NO_PACK_ZONES:
@@ -1779,7 +1779,7 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
             act_y = menu.addAction("🔥 Gán Hỏa Tốc (Tất Cả)")
             act_a = menu.addAction("🅰️ Gán Hỏa Tốc (Chỉ AHM)")
-            act_s = menu.addAction("⚡ Gán Hỏa Tốc (Chỉ SDD)")
+            act_s = menu.addAction("🪼 Gán Hỏa Tốc (Chỉ SDD)")
             menu.addSeparator()
 
         act_del = menu.addAction("❌ Xóa nhân sự")
