@@ -1035,7 +1035,7 @@ class ZoneListWidget(QListWidget):
                         elif urg == "A":
                             prefix = "🅰️ "
                         elif urg == "S":
-                            prefix = "⚡ "
+                            prefix = "🪼 "
 
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
                     taken_item.setData(Qt.UserRole, data)
@@ -1374,7 +1374,7 @@ class MainWindow(QMainWindow):
                     elif urg == "A":
                         prefix = "🅰️ "
                     elif urg == "S":
-                        prefix = "⚡ "
+                        prefix = "🪼 "
 
                 base_text = f'{prefix}{name_raw} - {wms_id}'
 
@@ -1777,9 +1777,9 @@ class MainWindow(QMainWindow):
             # Block Pick Normal
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
             menu.addSeparator()
-            act_y = menu.addAction("🔥 Gán Hỏa Tốc (Tất Cả)")
-            act_a = menu.addAction("🅰️ Gán Hỏa Tốc (Chỉ AHM)")
-            act_s = menu.addAction("🪼 Gán Hỏa Tốc (Chỉ SDD)")
+            act_y = menu.addAction("🔥 Gán Cả 2")
+            act_a = menu.addAction("🅰️ Gán AHM")
+            act_s = menu.addAction("🪼 Gán Chỉ SDD")
             menu.addSeparator()
 
         act_del = menu.addAction("❌ Xóa nhân sự")
