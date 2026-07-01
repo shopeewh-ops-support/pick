@@ -174,7 +174,7 @@ def get_dynamic_qss(scale):
 
 
 # --- CONSTANTS ---
-FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "FD", "C1", "C2", "C3", "E1", "E2", "TOP"]
+FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "FD", "C1", "C2", "C3", "E1", "E2", "E3", "TOP"]
 FLOW_NO_PACK_ZONES = ["E1", "E2", "TOP"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block E", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
@@ -1322,6 +1322,7 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "B1", flow_color_b, 0, 4, True, watermark_text="B1")
         self.create_zone_box(flow_grid, "B2", flow_color_b, 0, 5, True, watermark_text="B2")
         self.create_zone_box(flow_grid, "B3", flow_color_b, 0, 6, True, watermark_text="B3")
+        self.create_zone_box(flow_grid, "B4", flow_color_b, 0, 7, True, watermark_text="B4")
 
         self.create_zone_box(flow_grid, "FD", flow_color_b, 1, 0, True, watermark_text="FD")
         self.create_zone_box(flow_grid, "C1", flow_color_c, 1, 1, True, watermark_text="C1")
@@ -1329,7 +1330,8 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "C3", flow_color_c, 1, 3, True, watermark_text="C3")
         self.create_zone_box(flow_grid, "E1", flow_color_d, 1, 4, True, watermark_text="E1")
         self.create_zone_box(flow_grid, "E2", flow_color_d, 1, 5, True, watermark_text="E2")
-        self.create_zone_box(flow_grid, "TOP", flow_color_d, 1, 6, True, watermark_text="TOP")
+        self.create_zone_box(flow_grid, "E3", flow_color_d, 1, 6, True, watermark_text="E3")
+        self.create_zone_box(flow_grid, "TOP", flow_color_d, 1, 7, True, watermark_text="TOP")
 
         flow_layout_main.addLayout(flow_grid)
         self.stacked_widget.addWidget(flow_container)
