@@ -35,7 +35,6 @@ WAVE_RULE_GROUPS = {
 
 # --- CONSTANTS ---
 FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "FD", "C1", "C2", "C3", "E1", "E2", "E3", "TOP"]
-FLOW_0117_ZONES = ["E1", "E2", "E3", "TOP"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block E", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
@@ -364,11 +363,11 @@ class WMSUpdateRuleThread(QThread):
             do_post(all_staff, ["SA4"], ["SA4"], ["50011", "50021", "50032"], ["VNVLFPOG0053"])
 
         elif is_flow:
-            all_staff = urgent_all_staff + urgent_ahm_staff + urgent_sdd_staff + urgent_dmx_staff + normal_staff
-            if self.target_zone in FLOW_0117_ZONES:
-                do_post(all_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0117"])
-            else:
-                do_post(all_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0134"])
+            flow_ssaq_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "Q"]
+            flow_normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") != "Q"]
+
+            do_post(flow_normal_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0134"])
+            do_post(flow_ssaq_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0189"])
 
         else:
             target_z_list = list(normal_zones) if normal_zones else ["SA4"]
@@ -624,8 +623,9 @@ class FetchFlowTasksThread(QThread):
         }
 
         flow_counts = {zone: 0 for zone in FLOW_ZONES}
+        ssaq_counts = {zone: 0 for zone in FLOW_ZONES}
 
-        def fetch_group(group_id):
+        def fetch_group(group_id, target_dict):
             url = f"https://wms.ssc.shopee.vn/api/v2/apps/process/flowpicking/get_progress_monitoring_stats?group_id={group_id}&area_dimension_type=1&efficiency_ratio=2"
             try:
                 res = requests.get(url, headers=headers, timeout=10)
@@ -635,17 +635,17 @@ class FetchFlowTasksThread(QThread):
                         if item.get("is_total") == 0 and item.get("area_name"):
                             area_name = item.get("area_name")
                             order_qty = item.get("order_qty", 0)
-                            if area_name in flow_counts:
-                                flow_counts[area_name] += order_qty
+                            if area_name in target_dict:
+                                target_dict[area_name] += order_qty
             except Exception as e:
                 pass
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            f1 = executor.submit(fetch_group, "VNVLFPOG0134")
-            f2 = executor.submit(fetch_group, "VNVLFPOG0117")
+            f1 = executor.submit(fetch_group, "VNVLFPOG0134", flow_counts)
+            f2 = executor.submit(fetch_group, "VNVLFPOG0189", ssaq_counts)
             concurrent.futures.wait([f1, f2])
 
-        self.tasks_fetched.emit(flow_counts)
+        self.tasks_fetched.emit({"normal": flow_counts, "ssaq": ssaq_counts})
 
 
 class FirebaseUpdateThread(QThread):
@@ -955,12 +955,12 @@ class ZoneListWidget(QListWidget):
                     data["block"] = self.zone_id
 
                     if self.zone_id in FLOW_ZONES:
-                        data["urgent"] = "N"
+                        pass # Giữ nguyên thuộc tính khi kéo thả nội bộ Flow Zone
                     elif self.zone_id == "":
                         data["urgent"] = "N"
 
                     prefix = ""
-                    if self.zone_id not in FLOW_ZONES and self.zone_id != "":
+                    if self.zone_id != "":
                         urg = data.get("urgent", "N")
                         if urg == "Y":
                             prefix = "🔥 "
@@ -970,6 +970,8 @@ class ZoneListWidget(QListWidget):
                             prefix = "🪼 "
                         elif urg == "D": # Bổ sung icon ĐMX
                             prefix = "🛒 "
+                        elif urg == "Q": # Bổ sung icon SSAQ
+                            prefix = "⚧️ "
 
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
                     taken_item.setData(Qt.UserRole, data)
@@ -999,6 +1001,7 @@ class MainWindow(QMainWindow):
         self.task_counts = {}
         self.dynamic_task_counts = {}
         self.flow_task_counts = {}
+        self.flow_ssaq_counts = {}
 
         self.badges = {}
 
@@ -1293,7 +1296,7 @@ class MainWindow(QMainWindow):
                 block = data.get("block", "")
 
                 prefix = ""
-                if block not in FLOW_ZONES and block != "":
+                if block != "":
                     urg = data.get("urgent", "N")
                     if urg == "Y":
                         prefix = "🔥 "
@@ -1303,6 +1306,8 @@ class MainWindow(QMainWindow):
                         prefix = "🪼 "
                     elif urg == "D": # Bổ sung icon ĐMX
                         prefix = "🛒 "
+                    elif urg == "Q": # Bổ sung icon SSAQ
+                        prefix = "⚧️ "
 
                 base_text = f'{prefix}{name_raw} - {wms_id}'
 
@@ -1476,10 +1481,19 @@ class MainWindow(QMainWindow):
                     f"background-color: #FFFFFF; color: #06B6D4; font-weight: 600; border: 1px solid #A5F3FC; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
                 )
                 lbl_flow.setAlignment(Qt.AlignCenter)
+
+                lbl_ssaq = QLabel("⚧️ 0")
+                lbl_ssaq.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #9333EA; font-weight: 600; border: 1px solid #D8B4FE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
+                )
+                lbl_ssaq.setAlignment(Qt.AlignCenter)
+
                 h_layout.addWidget(lbl_people)
                 h_layout.addWidget(lbl_flow)
+                h_layout.addWidget(lbl_ssaq)
                 h_layout.addStretch()
                 badges_dict["flow"] = lbl_flow
+                badges_dict["ssaq"] = lbl_ssaq
             else:
                 h_layout.addWidget(lbl_people)
 
@@ -1538,8 +1552,11 @@ class MainWindow(QMainWindow):
                     b_dict["urgent"].setText(f"Hỏa Tốc\n🅰️ AHM: {t_ahm}\n🪼 SDD: {t_sdd}\n📦 Cả 2: {t_oth}\n🛒 ĐMX: {t_dmx}")
                 elif z_id in FLOW_ZONES:
                     f_qty = self.flow_task_counts.get(z_id, 0)
+                    q_qty = self.flow_ssaq_counts.get(z_id, 0)
                     if "flow" in b_dict:
                         b_dict["flow"].setText(f"📦 {f_qty}")
+                    if "ssaq" in b_dict:
+                        b_dict["ssaq"].setText(f"⚧️ {q_qty}")
 
         if hasattr(self, 'btn_tab_normal'):
             self.btn_tab_normal.setText(f"🎯 PICK NORMAL (👤 Tổng: {total_normal})")
@@ -1628,21 +1645,28 @@ class MainWindow(QMainWindow):
         data = item.data(Qt.UserRole)
         if not isinstance(data, dict): return
 
-        if not data.get("block") or data.get("block") in FLOW_ZONES:
+        if not data.get("block"):
             return
 
-        # Cập nhật vòng lặp để bao gồm cả ĐMX (D)
         urgent_state = data.get("urgent", "N")
-        if urgent_state == "N":
-            data["urgent"] = "Y"  # Tất cả
-        elif urgent_state == "Y":
-            data["urgent"] = "A"  # AHM
-        elif urgent_state == "A":
-            data["urgent"] = "S"  # SDD
-        elif urgent_state == "S":
-            data["urgent"] = "D"  # ĐMX
+
+        if data.get("block") in FLOW_ZONES:
+            if urgent_state == "N":
+                data["urgent"] = "Q" # SSAQ
+            else:
+                data["urgent"] = "N" # Normal
         else:
-            data["urgent"] = "N"  # Normal
+            # Cập nhật vòng lặp để bao gồm cả ĐMX (D)
+            if urgent_state == "N":
+                data["urgent"] = "Y"  # Tất cả
+            elif urgent_state == "Y":
+                data["urgent"] = "A"  # AHM
+            elif urgent_state == "A":
+                data["urgent"] = "S"  # SDD
+            elif urgent_state == "S":
+                data["urgent"] = "D"  # ĐMX
+            else:
+                data["urgent"] = "N"  # Normal
 
         item.setData(Qt.UserRole, data)
 
@@ -1664,9 +1688,14 @@ class MainWindow(QMainWindow):
         act_s = None
         act_d = None
         act_n = None
+        act_q = None
 
         if not data.get("block"):
             pass
+        elif data.get("block") in FLOW_ZONES:
+            act_n = menu.addAction("📦 Gán Flow Thường")
+            act_q = menu.addAction("⚧️ Gán Flow SSAQ")
+            menu.addSeparator()
         elif data.get("block") not in FLOW_ZONES:
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
             menu.addSeparator()
@@ -1717,6 +1746,15 @@ class MainWindow(QMainWindow):
         # Xử lý Event Menu Chọn ĐMX
         elif act_d and action == act_d:
             data["urgent"] = "D"
+            item.setData(Qt.UserRole, data)
+            self.start_thread(FirebaseUpdateThread("PUT", data=data))
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
+            self.trigger_search_update()
+
+        # Xử lý Event Menu Chọn Flow SSAQ
+        elif act_q and action == act_q:
+            data["urgent"] = "Q"
             item.setData(Qt.UserRole, data)
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
@@ -1787,7 +1825,8 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(dict)
     def on_flow_tasks_fetched(self, counts):
-        self.flow_task_counts = counts
+        self.flow_task_counts = counts.get("normal", {})
+        self.flow_ssaq_counts = counts.get("ssaq", {})
         self.update_all_badges()
 
     @pyqtSlot(object, object)
