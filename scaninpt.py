@@ -383,6 +383,11 @@ class ShopeeScannerTactile(QMainWindow):
         self.setWindowTitle("WMS Scanner Pro - VNVL")
         self.setFixedSize(650, 850)
 
+        # --- Set App Icon ---
+        icon_path = resource_path("logo.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         self.setStyleSheet("""
             QMainWindow { background-color: #F1F5F9; }
             QStackedWidget { background-color: #F1F5F9; }
@@ -759,7 +764,22 @@ class ShopeeScannerTactile(QMainWindow):
 
 
 if __name__ == '__main__':
+    # Giúp Windows nhận diện icon đúng dưới Taskbar thay vì icon mặc định của Python
+    try:
+        import ctypes
+
+        myappid = 'shopee.wms.scanner.pro'
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except Exception:
+        pass
+
     app = QApplication(sys.argv)
+
+    # Gán icon cho toàn bộ Application (áp dụng cho cả hộp thoại đổi mật khẩu)
+    icon_path = resource_path("logo.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+
     win = ShopeeScannerTactile()
     win.show()
     sys.exit(app.exec_())
