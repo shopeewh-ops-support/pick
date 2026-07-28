@@ -23,20 +23,14 @@ PT_GSHEET_ID = '1WZVgl1L86F75YVRqP4N8n2E3-K6AJCup6hKnVu3-0rE'
 PT_WORKSHEET_NAME = 'PT'
 BLACKLIST_SHEET_NAME = 'Blacklist'
 GSHEET_KEY_FILE = "googlesheet.json"
-SUCCESS_SOUND_FILE = "success.mp3"
+SUCCESS_SOUND_FILE = "OK.wav"
 
 # --- SỬA ĐOẠN IMPORT ÂM THANH ---
 try:
     import winsound
 except ImportError:
     winsound = None
-
-try:
-    from playsound import playsound
-    HAS_PLAYSOUND = True
-except ImportError:
-    HAS_PLAYSOUND = False
-
+    
 def resource_path(relative_path):
     if getattr(sys, 'frozen', False):
         base_path = os.path.dirname(sys.executable)
@@ -48,24 +42,22 @@ def resource_path(relative_path):
 def play_sound(stype):
     if sys.platform != 'win32' or not winsound: return
     try:
-        # Tìm file ở thư mục hiện tại (nơi local script vừa tải file mp3 về)
+        # Tìm file ở thư mục hiện tại
         p = os.path.join(os.getcwd(), SUCCESS_SOUND_FILE)
-        
-        # Nếu không thấy, thử dùng resource_path
         if not os.path.exists(p):
             p = resource_path(SUCCESS_SOUND_FILE)
 
         if stype == "success":
-            if os.path.exists(p) and HAS_PLAYSOUND:
-                playsound(p, block=False)
+            if os.path.exists(p):
+                # SND_FILENAME: Báo cho hệ thống biết p là đường dẫn file
+                # SND_ASYNC: Phát âm thanh chạy ngầm, không làm đơ (lag) giao diện
+                winsound.PlaySound(p, winsound.SND_FILENAME | winsound.SND_ASYNC)
             else:
-                # Nếu không có file mp3 hoặc chưa cài thư viện playsound -> Kêu Bíp
                 winsound.Beep(1000, 150)
         elif stype == "error":
             winsound.Beep(400, 600)
     except Exception as e:
         print(f"Lỗi phát âm thanh: {e}")
-
 
 # --- LUỒNG GHI GOOGLE SHEET TỨC THÌ ---
 class GSheetWriterWorker(QThread):
