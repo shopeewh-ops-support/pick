@@ -25,12 +25,17 @@ BLACKLIST_SHEET_NAME = 'Blacklist'
 GSHEET_KEY_FILE = "googlesheet.json"
 SUCCESS_SOUND_FILE = "success.mp3"
 
+# --- SỬA ĐOẠN IMPORT ÂM THANH ---
 try:
     import winsound
-    from playsound import playsound
 except ImportError:
     winsound = None
 
+try:
+    from playsound import playsound
+    HAS_PLAYSOUND = True
+except ImportError:
+    HAS_PLAYSOUND = False
 
 def resource_path(relative_path):
     if getattr(sys, 'frozen', False):
@@ -43,16 +48,23 @@ def resource_path(relative_path):
 def play_sound(stype):
     if sys.platform != 'win32' or not winsound: return
     try:
-        p = resource_path(SUCCESS_SOUND_FILE)
+        # Tìm file ở thư mục hiện tại (nơi local script vừa tải file mp3 về)
+        p = os.path.join(os.getcwd(), SUCCESS_SOUND_FILE)
+        
+        # Nếu không thấy, thử dùng resource_path
+        if not os.path.exists(p):
+            p = resource_path(SUCCESS_SOUND_FILE)
+
         if stype == "success":
-            if os.path.exists(p):
+            if os.path.exists(p) and HAS_PLAYSOUND:
                 playsound(p, block=False)
             else:
+                # Nếu không có file mp3 hoặc chưa cài thư viện playsound -> Kêu Bíp
                 winsound.Beep(1000, 150)
         elif stype == "error":
             winsound.Beep(400, 600)
-    except:
-        pass
+    except Exception as e:
+        print(f"Lỗi phát âm thanh: {e}")
 
 
 # --- LUỒNG GHI GOOGLE SHEET TỨC THÌ ---
