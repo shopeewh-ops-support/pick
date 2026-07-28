@@ -42,22 +42,26 @@ def resource_path(relative_path):
 def play_sound(stype):
     if sys.platform != 'win32' or not winsound: return
     try:
-        # Tìm file ở thư mục hiện tại
-        p = os.path.join(os.getcwd(), SUCCESS_SOUND_FILE)
-        if not os.path.exists(p):
-            p = resource_path(SUCCESS_SOUND_FILE)
+        # Lấy chính xác thư mục chứa file .exe đang chạy
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            
+        # Ghép thành đường dẫn tuyệt đối tới file OK.wav
+        p = os.path.join(base_dir, SUCCESS_SOUND_FILE)
 
         if stype == "success":
             if os.path.exists(p):
-                # SND_FILENAME: Báo cho hệ thống biết p là đường dẫn file
-                # SND_ASYNC: Phát âm thanh chạy ngầm, không làm đơ (lag) giao diện
+                # Phát âm thanh với đường dẫn tuyệt đối
                 winsound.PlaySound(p, winsound.SND_FILENAME | winsound.SND_ASYNC)
             else:
                 winsound.Beep(1000, 150)
         elif stype == "error":
             winsound.Beep(400, 600)
-    except Exception as e:
-        print(f"Lỗi phát âm thanh: {e}")
+    except Exception:
+        # Dự phòng: Nếu có lỗi hệ thống, vẫn kêu một tiếng Bíp để báo hiệu
+        winsound.Beep(800, 200)
 
 # --- LUỒNG GHI GOOGLE SHEET TỨC THÌ ---
 class GSheetWriterWorker(QThread):
