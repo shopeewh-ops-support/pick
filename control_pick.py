@@ -371,22 +371,23 @@ class WMSUpdateRuleThread(QThread):
         def do_post(staff_ids, zone_ids, flow_work_zones, channel_ids, group_ids):
             if not staff_ids: return
             payload = {
-                "checkbox_bit_set": 29,
+                "checkbox_bit_set": 61,
+                "zone_id_list": zone_ids,
                 "zone_hard_restrict": 1,
                 "zone_hard_restrict_apply_urgent": 1,
+                "channel_id_list": channel_ids,
                 "channel_hard_restrict": 1,
                 "channel_hard_restrict_apply_urgent": 1,
                 "shop_id_list": [],
                 "shop_hard_restrict": 0,
                 "shop_hard_restrict_apply_urgent": 0,
+                "flow_pick_working_zone_list": flow_work_zones,
+                "flow_pick_order_group_id_list": group_ids,
+                "dynamic_wave_order_group_id_list": [-1],
                 "cross_zone_level": 0,
                 "cross_zone_control": 0,
                 "preferred_area_level": 0,
-                "staff_id_list": staff_ids,
-                "zone_id_list": zone_ids,
-                "flow_pick_working_zone_list": flow_work_zones,
-                "channel_id_list": channel_ids,
-                "flow_pick_order_group_id_list": group_ids
+                "staff_id_list": staff_ids
             }
             try:
                 res = requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
