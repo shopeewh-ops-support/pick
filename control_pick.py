@@ -23,24 +23,22 @@ from google.oauth2.service_account import Credentials
 # WAVE RULE GROUPS
 # =========================================================================
 WAVE_RULE_GROUPS = {
-    "NDD": ["VNVLDWR0146", "VNVLDWR0147", "VNVLDWR0150", "VNVLDWR0151", "VNVLDWR0152",
-            "VNVLDWR0153", "VNVLDWR0157"],
-    "After-NDD": ["VNVLDWR0032", "VNVLDWR0034", "VNVLDWR0035", "VNVLDWR0036", "VNVLDWR0037",
-                  "VNVLDWR0038",
-                  "VNVLDWR0039", "VNVLDWR0040"],
-    "D-1": ["VNVLDWR0041", "VNVLDWR0043", "VNVLDWR0044", "VNVLDWR0045", "VNVLDWR0046", "VNVLDWR0047",
-            "VNVLDWR0048", "VNVLDWR0049"]
+    "NDD": ["VNVLDWR0157", "VNVLDWR0146", "VNVLDWR0147", "VNVLDWR0150",
+            "VNVLDWR0151", "VNVLDWR0152", "VNVLDWR0153"],
+    "D-": ["VNVLDWR0162", "VNVLDWR0163", "VNVLDWR0164", "VNVLDWR0165",
+           "VNVLDWR0166", "VNVLDWR0167", "VNVLDWR0168"],
+    "NDD Kho E": ["VNVLDWR0180", "VNVLDWR0181", "VNVLDWR0182", "VNVLDWR0183",
+                 "VNVLDWR0184", "VNVLDWR0185", "VNVLDWR0186", "VNVLDWR0187", "VNVLDWR0188"],
+    "D- Kho E": ["VNVLDWR0161", "VNVLDWR0169", "VNVLDWR0170", "VNVLDWR0171",
+                  "VNVLDWR0172", "VNVLDWR0173", "VNVLDWR0174", "VNVLDWR0175", "VNVLDWR0176"]
 }
 
 # --- CONSTANTS ---
-# Cập nhật thêm HV và E4 vào mảng FLOW_ZONES
-FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "HV", "FD", "C1", "C2", "C3", "E1", "E2", "E3", "E4",
-              "TOP"]
+FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "HV", "FD", "C1", "C2", "C3", "E1", "E2", "E3", "E4", "TOP"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block E", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
 FIREBASE_CONFIG_URL = "https://ship-8a347-default-rtdb.firebaseio.com/config"
-
 
 # --- HÀM LOẠI BỎ DẤU TIẾNG VIỆT ---
 def remove_accents(input_str):
@@ -180,7 +178,6 @@ def get_dynamic_qss(scale):
     }}
     """
 
-
 # --- BẮT LỖI TOÀN CỤC ---
 def log_uncaught_exceptions(ex_cls, ex, tb):
     text = '{}: {}:\n'.format(ex_cls.__name__, ex)
@@ -191,7 +188,6 @@ def log_uncaught_exceptions(ex_cls, ex, tb):
 
 
 sys.excepthook = log_uncaught_exceptions
-
 
 # --- CUSTOM WIDGETS ---
 class ToggleSwitch(QPushButton):
@@ -256,7 +252,6 @@ class WMSUpdateWaveRuleThread(QThread):
         total_count = len(self.rules_to_update)
 
         def send_req(rule_id, status):
-            nonlocal success_count
             payload = {
                 "rule_id": rule_id,
                 "switch_status": status
@@ -266,13 +261,16 @@ class WMSUpdateWaveRuleThread(QThread):
                 if res.status_code == 200:
                     data = res.json()
                     if data.get("retcode") == 0 and data.get("message") == "success":
-                        success_count += 1
+                        return True
             except Exception as e:
                 print(f"[WMS Wave Rule] Lỗi API Request ({rule_id}): {e}")
+            return False
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.rules_to_update)) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, total_count)) as executor:
             futures = [executor.submit(send_req, rule_id, status) for rule_id, status in self.rules_to_update.items()]
-            concurrent.futures.wait(futures)
+            for future in concurrent.futures.as_completed(futures):
+                if future.result():
+                    success_count += 1
 
         self.finished_update.emit(success_count, total_count)
 
@@ -424,7 +422,6 @@ class WMSUpdateRuleThread(QThread):
             do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50051"], ["VNVLFPOG0053"])
             do_post(urgent_dmx_staff, target_z_list, ["SA4"], ["50025"], ["VNVLFPOG0053"])
 
-
 class FetchTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
 
@@ -544,7 +541,6 @@ class FetchTasksThread(QThread):
             print(f"[DEBUG][WMS Tasks] Exception Lỗi Code: {e}")
             self.tasks_fetched.emit({})
 
-
 class FetchDynamicTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
 
@@ -657,7 +653,6 @@ class FetchDynamicTasksThread(QThread):
             print(f"[DEBUG][Dynamic Tasks] Exception Lỗi Code: {e}")
             self.tasks_fetched.emit({})
 
-
 class FetchFlowTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
 
@@ -707,7 +702,6 @@ class FetchFlowTasksThread(QThread):
 
         self.tasks_fetched.emit({"normal": flow_counts, "ssaq": ssaq_counts})
 
-
 class FirebaseUpdateThread(QThread):
     finished_signal = pyqtSignal()
 
@@ -744,7 +738,6 @@ class FirebaseUpdateThread(QThread):
             print(f"[DEBUG][Firebase] Lỗi Update: {e}")
         finally:
             self.finished_signal.emit()
-
 
 class InitDataThread(QThread):
     finished_signal = pyqtSignal(object, str, str)
@@ -1068,8 +1061,9 @@ class MainWindow(QMainWindow):
 
         self.current_toggle_states = {
             "NDD": False,
-            "After-NDD": False,
-            "D-1": False
+            "D-": False,
+            "NDD Kho E": False,
+            "D- Kho E": False
         }
 
         self.init_ui()
@@ -1092,8 +1086,9 @@ class MainWindow(QMainWindow):
             "Block C": self.txt_cfg_c.text().strip(),
             "Block E": self.txt_cfg_e.text().strip(),
             "NDD": self.toggle_ndd.isChecked(),
-            "After-NDD": self.toggle_andd.isChecked(),
-            "D-1": self.toggle_d1.isChecked()
+            "D-": self.toggle_dminus.isChecked(),
+            "NDD Kho E": self.toggle_ndd_e.isChecked(),
+            "D- Kho E": self.toggle_dminus_e.isChecked()
         }
 
     def init_ui(self):
@@ -1267,15 +1262,19 @@ class MainWindow(QMainWindow):
         config_layout.addWidget(lbl_dynamic_title, 5, 0, 1, 2)
 
         self.toggle_ndd = ToggleSwitch()
-        self.toggle_andd = ToggleSwitch()
-        self.toggle_d1 = ToggleSwitch()
+        self.toggle_dminus = ToggleSwitch()
+        self.toggle_ndd_e = ToggleSwitch()
+        self.toggle_dminus_e = ToggleSwitch()
 
-        self.toggle_ndd.clicked.connect(lambda: self.on_toggle_changed("NDD"))
-        self.toggle_andd.clicked.connect(lambda: self.on_toggle_changed("After-NDD"))
-        self.toggle_d1.clicked.connect(lambda: self.on_toggle_changed("D-1"))
+        # Bắt thêm tham số checked để tránh lỗi ẩn TypeError từ thư viện PyQt5
+        self.toggle_ndd.clicked.connect(lambda checked, name="NDD": self.on_toggle_changed(name))
+        self.toggle_dminus.clicked.connect(lambda checked, name="D-": self.on_toggle_changed(name))
+        self.toggle_ndd_e.clicked.connect(lambda checked, name="NDD Kho E": self.on_toggle_changed(name))
+        self.toggle_dminus_e.clicked.connect(lambda checked, name="D- Kho E": self.on_toggle_changed(name))
 
         for idx, (lbl_text, toggle_widget) in enumerate(
-                [("NDD:", self.toggle_ndd), ("After-NDD:", self.toggle_andd), ("D-1:", self.toggle_d1)]):
+                [("NDD:", self.toggle_ndd), ("D-:", self.toggle_dminus),
+                 ("NDD Kho E:", self.toggle_ndd_e), ("D- Kho E:", self.toggle_dminus_e)]):
             lbl = QLabel(lbl_text)
             lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
             config_layout.addWidget(lbl, 6 + idx, 0)
@@ -1284,7 +1283,7 @@ class MainWindow(QMainWindow):
         self.btn_edit_config = QPushButton("Chỉnh sửa")
         self.btn_edit_config.setStyleSheet("margin-top: 8px;")
         self.btn_edit_config.clicked.connect(self.toggle_config_edit)
-        config_layout.addWidget(self.btn_edit_config, 10, 0, 1, 2)
+        config_layout.addWidget(self.btn_edit_config, 11, 0, 1, 2)
 
         normal_grid.addWidget(config_frame, 0, 4, 2, 1)
 
@@ -1413,32 +1412,18 @@ class MainWindow(QMainWindow):
     def on_toggle_changed(self, changed_toggle_name):
         new_states = {
             "NDD": self.toggle_ndd.isChecked(),
-            "After-NDD": self.toggle_andd.isChecked(),
-            "D-1": self.toggle_d1.isChecked()
+            "D-": self.toggle_dminus.isChecked(),
+            "NDD Kho E": self.toggle_ndd_e.isChecked(),
+            "D- Kho E": self.toggle_dminus_e.isChecked()
         }
 
-        if new_states[changed_toggle_name] is True:
-            for k in new_states:
-                if k != changed_toggle_name:
-                    new_states[k] = False
-
-        self.toggle_ndd.blockSignals(True)
-        self.toggle_andd.blockSignals(True)
-        self.toggle_d1.blockSignals(True)
-
-        self.toggle_ndd.setChecked(new_states["NDD"])
-        self.toggle_andd.setChecked(new_states["After-NDD"])
-        self.toggle_d1.setChecked(new_states["D-1"])
-
-        self.toggle_ndd.blockSignals(False)
-        self.toggle_andd.blockSignals(False)
-        self.toggle_d1.blockSignals(False)
+        # Bỏ đi logic mutual exclusion (không còn ép tắt các nút khác nữa)
 
         rules_to_update = {}
         for k, v in new_states.items():
-            if v != self.current_toggle_states[k]:
+            if v != self.current_toggle_states.get(k, False):
                 status_int = 1 if v else 0
-                for rule_id in WAVE_RULE_GROUPS[k]:
+                for rule_id in WAVE_RULE_GROUPS.get(k, []):
                     rules_to_update[rule_id] = status_int
 
         self.current_toggle_states = new_states.copy()
@@ -1454,10 +1439,10 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(int, int)
     def on_wave_rules_updated(self, success_count, total_count):
-        if success_count == total_count:
+        if success_count == total_count and total_count > 0:
             self.lbl_status.setText(f"✅ Đã cấu hình xong {success_count}/{total_count} Wave Rules!")
             self.lbl_status.setStyleSheet("color: #10B981;")
-        else:
+        elif total_count > 0:
             self.lbl_status.setText(f"⚠️ Đã cấu hình {success_count}/{total_count} Wave Rules. Có lỗi xảy ra!")
             self.lbl_status.setStyleSheet("color: #F59E0B;")
 
@@ -1904,22 +1889,26 @@ class MainWindow(QMainWindow):
             self.txt_cfg_e.setText(config_dict.get("Block E", ""))
 
             self.toggle_ndd.blockSignals(True)
-            self.toggle_andd.blockSignals(True)
-            self.toggle_d1.blockSignals(True)
+            self.toggle_dminus.blockSignals(True)
+            self.toggle_ndd_e.blockSignals(True)
+            self.toggle_dminus_e.blockSignals(True)
 
             is_ndd = _parse_bool(config_dict.get("NDD", False))
-            is_andd = _parse_bool(config_dict.get("After-NDD", False))
-            is_d1 = _parse_bool(config_dict.get("D-1", False))
+            is_dminus = _parse_bool(config_dict.get("D-", False))
+            is_ndd_e = _parse_bool(config_dict.get("NDD Kho E", False))
+            is_dminus_e = _parse_bool(config_dict.get("D- Kho E", False))
 
             self.toggle_ndd.setChecked(is_ndd)
-            self.toggle_andd.setChecked(is_andd)
-            self.toggle_d1.setChecked(is_d1)
+            self.toggle_dminus.setChecked(is_dminus)
+            self.toggle_ndd_e.setChecked(is_ndd_e)
+            self.toggle_dminus_e.setChecked(is_dminus_e)
 
-            self.current_toggle_states = {"NDD": is_ndd, "After-NDD": is_andd, "D-1": is_d1}
+            self.current_toggle_states = {"NDD": is_ndd, "D-": is_dminus, "NDD Kho E": is_ndd_e, "D- Kho E": is_dminus_e}
 
             self.toggle_ndd.blockSignals(False)
-            self.toggle_andd.blockSignals(False)
-            self.toggle_d1.blockSignals(False)
+            self.toggle_dminus.blockSignals(False)
+            self.toggle_ndd_e.blockSignals(False)
+            self.toggle_dminus_e.blockSignals(False)
 
         if pickers_dict is None:
             self.lbl_status.setText("❌ Lỗi đồng bộ Firebase!")
@@ -1981,7 +1970,6 @@ class MainWindow(QMainWindow):
             config_data = self.get_current_config()
             self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
             self.refresh_wms_tasks()
-
 
 if __name__ == "__main__":
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
