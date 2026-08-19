@@ -34,7 +34,6 @@ WAVE_RULE_GROUPS = {
 }
 
 # --- CONSTANTS ---
-# E1, E2, E3, E4, REP are combined into KHO_E
 FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "B5", "HV", "FD", "C1", "C2", "C3", "KHO_E", "TOP"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block E", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
@@ -42,7 +41,6 @@ FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
 FIREBASE_CONFIG_URL = "https://ship-8a347-default-rtdb.firebaseio.com/config"
 
 
-# --- HÀM LOẠI BỎ DẤU TIẾNG VIỆT ---
 def remove_accents(input_str):
     s = str(input_str)
     s = unicodedata.normalize('NFD', s)
@@ -50,7 +48,6 @@ def remove_accents(input_str):
     return s.replace('đ', 'd').replace('Đ', 'D')
 
 
-# --- HÀM TÍNH TỶ LỆ MÀN HÌNH (SCALE FACTOR) ---
 def get_scale_factor():
     screen = QApplication.primaryScreen().availableGeometry()
     scale_w = screen.width() / 1920.0
@@ -58,7 +55,6 @@ def get_scale_factor():
     return min(scale_w, scale_h, 1.0)
 
 
-# --- GIAO DIỆN HIỆN ĐẠI (MODERN PASTEL DASHBOARD UI) ---
 def get_dynamic_qss(scale):
     f_list = max(10, int(12 * scale))
     f_btn = max(10, int(12 * scale))
@@ -181,7 +177,6 @@ def get_dynamic_qss(scale):
     """
 
 
-# --- BẮT LỖI TOÀN CỤC ---
 def log_uncaught_exceptions(ex_cls, ex, tb):
     text = '{}: {}:\n'.format(ex_cls.__name__, ex)
     text += ''.join(traceback.format_tb(tb))
@@ -193,7 +188,6 @@ def log_uncaught_exceptions(ex_cls, ex, tb):
 sys.excepthook = log_uncaught_exceptions
 
 
-# --- CUSTOM WIDGETS ---
 class ToggleSwitch(QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -208,15 +202,13 @@ class ToggleSwitch(QPushButton):
         painter.setPen(Qt.NoPen)
 
         rect = QRect(0, 0, self.width(), self.height())
-        # Vẽ nền
         if self.isChecked():
-            painter.setBrush(QColor("#4ADE80"))  # Xanh lá
+            painter.setBrush(QColor("#4ADE80"))
         else:
-            painter.setBrush(QColor("#E2E8F0"))  # Xám
+            painter.setBrush(QColor("#E2E8F0"))
 
         painter.drawRoundedRect(0, 0, rect.width(), rect.height(), 12, 12)
 
-        # Vẽ hình tròn
         painter.setBrush(QColor("#FFFFFF"))
         if self.isChecked():
             painter.drawEllipse(self.width() - 22, 2, 20, 20)
@@ -225,7 +217,6 @@ class ToggleSwitch(QPushButton):
         painter.end()
 
 
-# --- WORKERS ---
 class WMSUpdateWaveRuleThread(QThread):
     finished_update = pyqtSignal(int, int)
 
@@ -303,8 +294,6 @@ class WMSUpdateRuleThread(QThread):
             "Cookie": self.wms_cookie
         }
 
-        # --- LOGIC CẬP NHẬT PICK0024 / PICK0025 KHI CHUYỂN VÙNG ---
-        # Flow SSAQ (urgent = Q) sẽ dùng Pick0025, ngược lại mọi thứ đều là Pick0024
         def do_set_skill(wms_id, rule_id):
             try:
                 url_rule = f"https://wms.ssc.shopee.vn/api/v2/apps/process/outbound/pickingrule/get_picking_rule_detail?rule_id={rule_id}&user_id={wms_id}"
@@ -330,28 +319,23 @@ class WMSUpdateRuleThread(QThread):
             wms_id = p.get("wms_id")
             if not wms_id or not str(wms_id).isdigit():
                 continue
-
             is_flow_zone = self.target_zone in FLOW_ZONES
             target_rule = "Pick0025" if (is_flow_zone and p.get("urgent") == "Q") else "Pick0024"
             skills_to_set.append((wms_id, target_rule))
 
-        # Gọi API Cập nhật skill Pick0024 / Pick0025 song song
         if skills_to_set:
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, len(skills_to_set))) as executor:
                 futures = [executor.submit(do_set_skill, wid, rid) for wid, rid in skills_to_set]
                 concurrent.futures.wait(futures)
 
-        # --- LOGIC GÁN VÙNG (ZONE) ---
         url_mass_adjust = "https://wms.ssc.shopee.vn/api/v2/apps/process/outbound/pickingrule/mass_adjust_staff_picking_rule"
         is_flow = self.target_zone in FLOW_ZONES
         is_none = self.target_zone == ""
 
-        # Xử lý KHO_E đặc biệt
         if self.target_zone == "KHO_E":
-            # Phân nhóm người dùng theo kho_e_group để gán chung một lúc
             groups = {}
             for p in self.picker_list:
-                grp = p.get("kho_e_group", "VNVLFPOG0211")  # Mặc định là Phú Thái Normal
+                grp = p.get("kho_e_group", "VNVLFPOG0211")
                 if grp not in groups:
                     groups[grp] = []
                 groups[grp].append(p["user_id"])
@@ -381,12 +365,10 @@ class WMSUpdateRuleThread(QThread):
                     res = requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
                     print(
                         f"\n[API CALLED] KHO_E Assigned (Group: {grp}, People: {len(staff_ids)}) -> Status: {res.status_code}")
-                    print(f"-> Payload Sent: {json.dumps(payload, indent=2)}")
                 except Exception as e:
                     print(f"[DEBUG] Lỗi API KHO_E: {e}")
-            return  # Đã xử lý xong nếu vào KHO_E
+            return
 
-        # Các vùng còn lại
         normal_zones = set()
         if not is_flow and not is_none:
             cfg_a = [z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()]
@@ -433,17 +415,10 @@ class WMSUpdateRuleThread(QThread):
             }
             try:
                 res = requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
-                print("\n" + "=" * 50)
-                print("[API CALLED] mass_adjust_staff_picking_rule")
-                print(f"-> Target Zone: {self.target_zone}")
-                print(f"-> Status Code: {res.status_code}")
-                try:
-                    print(f"-> Response JSON: {res.json()}")
-                except:
-                    print(f"-> Response Text: {res.text}")
-                print("=" * 50 + "\n")
+                print(
+                    f"[API CALLED] mass_adjust_staff_picking_rule -> Zone: {self.target_zone} -> Status: {res.status_code}")
             except Exception as e:
-                print(f"[DEBUG][WMS Update Rule] Lỗi API Request: {e}")
+                pass
 
         urgent_all_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "Y"]
         urgent_ahm_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "A"]
@@ -584,7 +559,7 @@ class FetchTasksThread(QThread):
 
             self.tasks_fetched.emit(counts)
         except Exception as e:
-            print(f"[DEBUG][WMS Tasks] Exception Lỗi Code: {e}")
+            print(f"[DEBUG][WMS Tasks] Exception: {e}")
             self.tasks_fetched.emit({})
 
 
@@ -601,8 +576,8 @@ class FetchDynamicTasksThread(QThread):
             self.tasks_fetched.emit({})
             return
 
-        counts = {block: {"normal": set(), "ahm": set(), "sdd": set(), "dmx": set(), "oth": set()} for block in
-                  NORMAL_BLOCKS}
+        # Sửa cấu trúc count: dùng set() cho normal để gom theo pickup_id, nhưng dùng số nguyên (int) để đếm trực tiếp cho AHM, SDD, DMX.
+        counts = {block: {"normal": set(), "ahm": 0, "sdd": 0, "dmx": 0, "oth": 0} for block in NORMAL_BLOCKS}
 
         cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
         cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
@@ -639,10 +614,6 @@ class FetchDynamicTasksThread(QThread):
                 total = data.get("total", 0)
 
                 for task in batch_list:
-                    pickup_id = task.get("pickup_id")
-                    if not pickup_id:
-                        continue
-
                     channels = set(str(c) for c in task.get("channel_id_list", []))
                     has_ahm = bool(channels & {"50033", "50044"})
                     has_sdd = bool(channels & {"50051"})
@@ -661,6 +632,12 @@ class FetchDynamicTasksThread(QThread):
                     else:
                         task_type = "normal"
 
+                    pickup_id = task.get("pickup_id")
+
+                    # Bỏ qua nếu đơn NORMAL không có pickup_id (để gom group), nhưng các đơn hỏa tốc (AHM, SDD, DMX) thì VẪN ĐẾM BÌNH THƯỜNG
+                    if task_type == "normal" and not pickup_id:
+                        continue
+
                     z_str = task.get("zone_list", "")
                     t_zones = set([z.strip() for z in z_str.split(",") if z.strip()])
 
@@ -669,35 +646,47 @@ class FetchDynamicTasksThread(QThread):
                     has_c = bool(t_zones & cfg_c)
                     has_e = bool(t_zones & cfg_e)
 
+                    def record_task(block_key):
+                        if task_type == "normal":
+                            counts[block_key]["normal"].add(pickup_id)
+                        else:
+                            counts[block_key][task_type] += 1
+
                     if has_a and has_b and has_c:
-                        counts["Block A&B&C"][task_type].add(pickup_id)
+                        record_task("Block A&B&C")
                     elif has_a and has_b:
-                        counts["Block A&B"][task_type].add(pickup_id)
+                        record_task("Block A&B")
                     elif has_a and has_c:
-                        counts["Block A&C"][task_type].add(pickup_id)
+                        record_task("Block A&C")
                     elif has_b and has_c:
-                        counts["Block B&C"][task_type].add(pickup_id)
+                        record_task("Block B&C")
                     elif has_a:
-                        counts["Block A"][task_type].add(pickup_id)
+                        record_task("Block A")
                     elif has_b:
-                        counts["Block B"][task_type].add(pickup_id)
+                        record_task("Block B")
                     elif has_c:
-                        counts["Block C"][task_type].add(pickup_id)
+                        record_task("Block C")
                     elif has_e:
-                        counts["Block E"][task_type].add(pickup_id)
+                        record_task("Block E")
 
                 if not batch_list or (pageno * 200) >= total:
                     break
                 pageno += 1
 
+            # Transform output to raw totals so the UI can just add them
             final_counts = {
-                k: {"normal": len(v["normal"]), "ahm": len(v["ahm"]), "sdd": len(v["sdd"]), "dmx": len(v["dmx"]),
-                    "oth": len(v["oth"])} for
-                k, v in counts.items()}
+                k: {
+                    "normal": len(v["normal"]),
+                    "ahm": v["ahm"],
+                    "sdd": v["sdd"],
+                    "dmx": v["dmx"],
+                    "oth": v["oth"]
+                } for k, v in counts.items()
+            }
             self.tasks_fetched.emit(final_counts)
 
         except Exception as e:
-            print(f"[DEBUG][Dynamic Tasks] Exception Lỗi Code: {e}")
+            print(f"[DEBUG][Dynamic Tasks] Exception: {e}")
             self.tasks_fetched.emit({})
 
 
@@ -741,7 +730,7 @@ class FetchFlowTasksThread(QThread):
                             order_qty = item.get("order_qty", 0)
                             if area_name in target_dict:
                                 target_dict[area_name] += order_qty
-            except Exception as e:
+            except Exception:
                 pass
 
         def fetch_group_total(group_id, key):
@@ -754,19 +743,17 @@ class FetchFlowTasksThread(QThread):
                         if item.get("is_total") == 1:
                             kho_e_counts[key] = item.get("order_qty", 0)
                             break
-            except Exception as e:
+            except Exception:
                 pass
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
             f1 = executor.submit(fetch_group, "VNVLFPOG0134", flow_counts)
             f2 = executor.submit(fetch_group, "VNVLFPOG0189", ssaq_counts)
-
-            # Fetch for Kho E subgroups by their total tasks
-            f3 = executor.submit(fetch_group_total, "VNVLFPOG0211", "PT_N")  # Phú Thái Normal
-            f4 = executor.submit(fetch_group_total, "VNVLFPOG0219", "PT_Q")  # Phú Thái SSAQ
-            f5 = executor.submit(fetch_group_total, "VNVLFPOG0220", "TV")  # Tivi
-            f6 = executor.submit(fetch_group_total, "VNVLFPOG0221", "MGTL")  # MGTL
-            f7 = executor.submit(fetch_group_total, "VNVLFPOG0222", "GD")  # Gia Dụng
+            f3 = executor.submit(fetch_group_total, "VNVLFPOG0211", "PT_N")
+            f4 = executor.submit(fetch_group_total, "VNVLFPOG0219", "PT_Q")
+            f5 = executor.submit(fetch_group_total, "VNVLFPOG0220", "TV")
+            f6 = executor.submit(fetch_group_total, "VNVLFPOG0221", "MGTL")
+            f7 = executor.submit(fetch_group_total, "VNVLFPOG0222", "GD")
 
             concurrent.futures.wait([f1, f2, f3, f4, f5, f6, f7])
 
@@ -862,15 +849,10 @@ class InitDataThread(QThread):
 
             if len(all_data) > 1:
                 for row in all_data[1:]:
-                    while len(row) < 6:
-                        row.append("")
-
+                    while len(row) < 6: row.append("")
                     user_id = str(row[0]).strip()
                     wms_id = str(row[1]).strip()
-
-                    if not user_id and not wms_id:
-                        continue
-
+                    if not user_id and not wms_id: continue
                     cached_data.append({
                         "UserID": user_id,
                         "WMSID": wms_id,
@@ -927,8 +909,8 @@ class ProcessApiThread(QThread):
             emp_name, emp_sex, emp_wmsid, emp_userid, emp_email = "Không xác định", "", scanned_id, scanned_id, ""
 
             for emp in self.cached_data:
-                if (id_type == "wms" and emp["WMSID"] == scanned_id) or \
-                        (id_type == "user" and emp["UserID"].upper() == scanned_id):
+                if (id_type == "wms" and emp["WMSID"] == scanned_id) or (
+                        id_type == "user" and emp["UserID"].upper() == scanned_id):
                     emp_name = emp["Name"]
                     emp_sex = emp["Sex"]
                     emp_wmsid = emp["WMSID"]
@@ -975,11 +957,10 @@ class ProcessApiThread(QThread):
                         if "staff_no" in staff_info and emp_userid == scanned_id: emp_userid = staff_info[
                             "staff_no"].upper()
                         if not emp_email and "staff_email" in staff_info: emp_email = staff_info.get("staff_email", "")
-                except Exception as e:
+                except Exception:
                     pass
 
             if self.wms_cookie and emp_wmsid.isdigit():
-                # Logic gán mặc định Pick0024 khi scan nhân sự mới (Cõi Tạm)
                 try:
                     url_rule = f"https://wms.ssc.shopee.vn/api/v2/apps/process/outbound/pickingrule/get_picking_rule_detail?rule_id=Pick0024&user_id={emp_wmsid}"
                     res_rule = requests.get(url_rule, headers=headers_wms).json()
@@ -993,7 +974,7 @@ class ProcessApiThread(QThread):
                             "https://wms.ssc.shopee.vn/api/v2/apps/process/outbound/pickerskill/create_picker_skill",
                             json=payload_wms, headers=headers_wms).json()
                         if res_create.get("retcode") == 0: wms_success = True
-                except Exception as e:
+                except Exception:
                     pass
 
             safe_sex = remove_accents(str(emp_sex)).strip().lower()
@@ -1024,7 +1005,6 @@ class FetchFirebaseThread(QThread):
             self.data_fetched.emit(None, None)
 
 
-# --- UI COMPONENTS ---
 class ScanTextEdit(QTextEdit):
     enter_pressed = pyqtSignal(str)
 
@@ -1058,7 +1038,6 @@ class ZoneListWidget(QListWidget):
         painter = QPainter(self.viewport())
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Nhỏ chữ watermark lại một chút nếu dài
         font_size = max(50, int(100 * self.scale))
         if len(self.watermark_text) > 5:
             font_size = max(30, int(60 * self.scale))
@@ -1080,7 +1059,6 @@ class ZoneListWidget(QListWidget):
         row = self.indexAt(event.pos()).row()
         if row == -1: row = self.count()
 
-        # Xử lý đặc biệt khi thả vào KHO_E
         kho_e_grp = None
         kho_e_urg = "N"
         kho_e_lbl = ""
@@ -1093,32 +1071,21 @@ class ZoneListWidget(QListWidget):
             a4 = menu.addAction("📦 MGTL")
             a5 = menu.addAction("📦 Gia Dụng")
 
-            # Hiển thị Menu tại con trỏ chuột khi vừa thả
             act = menu.exec_(QCursor.pos())
             if not act:
-                event.ignore()  # Hủy thả nếu không chọn gì
+                event.ignore()
                 return
 
             if act == a1:
-                kho_e_grp = "VNVLFPOG0211"
-                kho_e_urg = "N"
-                kho_e_lbl = "PT-N"
+                kho_e_grp, kho_e_urg, kho_e_lbl = "VNVLFPOG0211", "N", "PT-N"
             elif act == a2:
-                kho_e_grp = "VNVLFPOG0219"
-                kho_e_urg = "Q"
-                kho_e_lbl = "PT-Q"
+                kho_e_grp, kho_e_urg, kho_e_lbl = "VNVLFPOG0219", "Q", "PT-Q"
             elif act == a3:
-                kho_e_grp = "VNVLFPOG0220"
-                kho_e_urg = "N"
-                kho_e_lbl = "TV"
+                kho_e_grp, kho_e_urg, kho_e_lbl = "VNVLFPOG0220", "N", "TV"
             elif act == a4:
-                kho_e_grp = "VNVLFPOG0221"
-                kho_e_urg = "N"
-                kho_e_lbl = "MGTL"
+                kho_e_grp, kho_e_urg, kho_e_lbl = "VNVLFPOG0221", "N", "MGTL"
             elif act == a5:
-                kho_e_grp = "VNVLFPOG0222"
-                kho_e_urg = "N"
-                kho_e_lbl = "GD"
+                kho_e_grp, kho_e_urg, kho_e_lbl = "VNVLFPOG0222", "N", "GD"
 
         dropped_data = []
         for item in source.selectedItems():
@@ -1128,11 +1095,8 @@ class ZoneListWidget(QListWidget):
                 if isinstance(data, dict):
                     data["block"] = self.zone_id
 
-                    # Cập nhật thông tin nếu rơi vào KHO E
                     if self.zone_id == "KHO_E":
-                        data["kho_e_group"] = kho_e_grp
-                        data["urgent"] = kho_e_urg
-                        data["kho_e_label"] = kho_e_lbl
+                        data["kho_e_group"], data["urgent"], data["kho_e_label"] = kho_e_grp, kho_e_urg, kho_e_lbl
                     elif self.zone_id in FLOW_ZONES:
                         pass
                     elif self.zone_id == "":
@@ -1166,7 +1130,6 @@ class ZoneListWidget(QListWidget):
             self.items_dropped_signal.emit(self.zone_id, dropped_data)
 
 
-# --- MAIN WINDOW ---
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1183,7 +1146,7 @@ class MainWindow(QMainWindow):
         self.dynamic_task_counts = {}
         self.flow_task_counts = {}
         self.flow_ssaq_counts = {}
-        self.kho_e_task_counts = {}  # Lưu đếm task của kho E
+        self.kho_e_task_counts = {}
 
         self.badges = {}
 
@@ -1228,7 +1191,6 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(pad_main, pad_main, pad_main, pad_main)
         main_layout.setSpacing(pad_main)
 
-        # --- Header Panel ---
         header_widget = QWidget()
         header_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         header_layout = QHBoxLayout(header_widget)
@@ -1312,7 +1274,6 @@ class MainWindow(QMainWindow):
         workspace_layout = QHBoxLayout()
         workspace_layout.setSpacing(pad_main)
 
-        # Bóp nhỏ vùng Cõi Tạm lại còn ~1/8 theo tỷ lệ với các ô kế tiếp
         left_panel_container = QWidget()
         left_layout = QVBoxLayout(left_panel_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -1343,7 +1304,7 @@ class MainWindow(QMainWindow):
         right_layout.addLayout(tab_layout)
         self.stacked_widget = QStackedWidget()
 
-        # 1. NORMAL PICK
+        # Normal Pick Tab
         normal_container = QWidget()
         normal_layout_main = QVBoxLayout(normal_container)
         normal_layout_main.setContentsMargins(0, 0, 0, 0)
@@ -1394,15 +1355,14 @@ class MainWindow(QMainWindow):
         self.toggle_ndd_e = ToggleSwitch()
         self.toggle_dminus_e = ToggleSwitch()
 
-        # Bắt thêm tham số checked để tránh lỗi ẩn TypeError từ thư viện PyQt5
         self.toggle_ndd.clicked.connect(lambda checked, name="NDD": self.on_toggle_changed(name))
         self.toggle_dminus.clicked.connect(lambda checked, name="D-": self.on_toggle_changed(name))
         self.toggle_ndd_e.clicked.connect(lambda checked, name="NDD Kho E": self.on_toggle_changed(name))
         self.toggle_dminus_e.clicked.connect(lambda checked, name="D- Kho E": self.on_toggle_changed(name))
 
         for idx, (lbl_text, toggle_widget) in enumerate(
-                [("NDD:", self.toggle_ndd), ("D-:", self.toggle_dminus),
-                 ("NDD Kho E:", self.toggle_ndd_e), ("D- Kho E:", self.toggle_dminus_e)]):
+                [("NDD:", self.toggle_ndd), ("D-:", self.toggle_dminus), ("NDD Kho E:", self.toggle_ndd_e),
+                 ("D- Kho E:", self.toggle_dminus_e)]):
             lbl = QLabel(lbl_text)
             lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
             config_layout.addWidget(lbl, 6 + idx, 0)
@@ -1423,7 +1383,7 @@ class MainWindow(QMainWindow):
         normal_layout_main.addLayout(normal_grid)
         self.stacked_widget.addWidget(normal_container)
 
-        # 2. FLOW PICK
+        # Flow Pick Tab
         flow_container = QWidget()
         flow_layout_main = QVBoxLayout(flow_container)
         flow_layout_main.setContentsMargins(0, 0, 0, 0)
@@ -1452,16 +1412,14 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "C2", flow_color_c, 1, 3, True, watermark_text="C2")
         self.create_zone_box(flow_grid, "C3", flow_color_c, 1, 4, True, watermark_text="C3")
 
-        # Gộp E1, E2, E3, E4, REP vào KHO_E (Chiếm 3 cột)
-        self.create_zone_box(flow_grid, "KHO_E", flow_color_d, 1, 6, is_grid=True, colspan=3,
-                             watermark_text="KHO E")
+        self.create_zone_box(flow_grid, "KHO_E", flow_color_d, 1, 6, is_grid=True, colspan=3, watermark_text="KHO E")
         self.create_zone_box(flow_grid, "TOP", flow_color_d, 1, 5, True, watermark_text="TOP")
 
         flow_layout_main.addLayout(flow_grid)
         self.stacked_widget.addWidget(flow_container)
 
         right_layout.addWidget(self.stacked_widget, stretch=1)
-        workspace_layout.addWidget(right_panel, stretch=7)  # Stretch 7 để cân đối với 1 bên trái ~ 12.5%
+        workspace_layout.addWidget(right_panel, stretch=7)
 
         main_layout.addLayout(workspace_layout)
 
@@ -1547,8 +1505,6 @@ class MainWindow(QMainWindow):
             "D- Kho E": self.toggle_dminus_e.isChecked()
         }
 
-        # Bỏ đi logic mutual exclusion (không còn ép tắt các nút khác nữa)
-
         rules_to_update = {}
         for k, v in new_states.items():
             if v != self.current_toggle_states.get(k, False):
@@ -1627,8 +1583,7 @@ class MainWindow(QMainWindow):
 
             lbl_people = QLabel("👤 0")
             lbl_people.setStyleSheet(
-                f"background-color: #FFFFFF; color: {top_border_color}; font-weight: 600; border: 1px solid #E2E8F0; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
-            )
+                f"background-color: #FFFFFF; color: {top_border_color}; font-weight: 600; border: 1px solid #E2E8F0; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
             lbl_people.setAlignment(Qt.AlignCenter)
             badges_dict = {"people": lbl_people}
 
@@ -1658,14 +1613,12 @@ class MainWindow(QMainWindow):
             elif lw_id in NORMAL_BLOCKS:
                 lbl_normal = QLabel("Normal\n📦 Wave: 0\n⚡ Auto: 0")
                 lbl_normal.setStyleSheet(
-                    f"background-color: #FFFFFF; color: #3B82F6; font-weight: 600; border: 1px solid #BFDBFE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
-                )
+                    f"background-color: #FFFFFF; color: #3B82F6; font-weight: 600; border: 1px solid #BFDBFE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
                 lbl_normal.setAlignment(Qt.AlignCenter)
 
                 lbl_urgent = QLabel("Hỏa Tốc\n🅰️ AHM: 0\n🪼 SDD: 0\n📦 Cả 2: 0\n🛒 ĐMX: 0")
                 lbl_urgent.setStyleSheet(
-                    f"background-color: #FFFFFF; color: #EF4444; font-weight: 600; border: 1px solid #FECACA; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
-                )
+                    f"background-color: #FFFFFF; color: #EF4444; font-weight: 600; border: 1px solid #FECACA; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
                 lbl_urgent.setAlignment(Qt.AlignCenter)
 
                 h_layout.addWidget(lbl_normal)
@@ -1679,14 +1632,12 @@ class MainWindow(QMainWindow):
             elif lw_id in FLOW_ZONES:
                 lbl_flow = QLabel("📦 0")
                 lbl_flow.setStyleSheet(
-                    f"background-color: #FFFFFF; color: #06B6D4; font-weight: 600; border: 1px solid #A5F3FC; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
-                )
+                    f"background-color: #FFFFFF; color: #06B6D4; font-weight: 600; border: 1px solid #A5F3FC; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
                 lbl_flow.setAlignment(Qt.AlignCenter)
 
                 lbl_ssaq = QLabel("⚧️ 0")
                 lbl_ssaq.setStyleSheet(
-                    f"background-color: #FFFFFF; color: #9333EA; font-weight: 600; border: 1px solid #D8B4FE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;"
-                )
+                    f"background-color: #FFFFFF; color: #9333EA; font-weight: 600; border: 1px solid #D8B4FE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
                 lbl_ssaq.setAlignment(Qt.AlignCenter)
 
                 h_layout.addWidget(lbl_people)
@@ -1750,6 +1701,7 @@ class MainWindow(QMainWindow):
                     t_norm = task_data.get("normal", 0) + dyn_data.get("normal", 0)
                     d_norm = dyn_data.get("normal", 0)
 
+                    # Đã có logic cộng gộp của dyn_data (Hỏa tốc ảo) ở đây rồi nên sẽ hiển thị chính xác
                     t_ahm = task_data.get("ahm", 0) + dyn_data.get("ahm", 0)
                     t_sdd = task_data.get("sdd", 0) + dyn_data.get("sdd", 0)
                     t_dmx = task_data.get("dmx", 0) + dyn_data.get("dmx", 0)
@@ -1761,10 +1713,8 @@ class MainWindow(QMainWindow):
                 elif z_id in FLOW_ZONES:
                     f_qty = self.flow_task_counts.get(z_id, 0)
                     q_qty = self.flow_ssaq_counts.get(z_id, 0)
-                    if "flow" in b_dict:
-                        b_dict["flow"].setText(f"📦 {f_qty}")
-                    if "ssaq" in b_dict:
-                        b_dict["ssaq"].setText(f"⚧️ {q_qty}")
+                    if "flow" in b_dict: b_dict["flow"].setText(f"📦 {f_qty}")
+                    if "ssaq" in b_dict: b_dict["ssaq"].setText(f"⚧️ {q_qty}")
 
         if hasattr(self, 'btn_tab_normal'):
             self.btn_tab_normal.setText(f"🎯 PICK NORMAL (👤 Tổng: {total_normal})")
@@ -1873,21 +1823,19 @@ class MainWindow(QMainWindow):
         data = item.data(Qt.UserRole)
         if not isinstance(data, dict): return
 
-        if not data.get("block"):
-            return
+        if not data.get("block"): return
 
         if data.get("block") == "KHO_E":
-            self.on_context_menu(self.listboxes["KHO_E"].mapFromGlobal(QCursor.pos()),
-                                 self.listboxes["KHO_E"])
+            self.on_context_menu(self.listboxes["KHO_E"].mapFromGlobal(QCursor.pos()), self.listboxes["KHO_E"])
             return
 
         urgent_state = data.get("urgent", "N")
 
         if data.get("block") in FLOW_ZONES:
             if urgent_state == "N":
-                data["urgent"] = "Q"  # SSAQ
+                data["urgent"] = "Q"
             else:
-                data["urgent"] = "N"  # Normal
+                data["urgent"] = "N"
         else:
             if urgent_state == "N":
                 data["urgent"] = "Y"
@@ -1929,12 +1877,7 @@ class MainWindow(QMainWindow):
         data = item.data(Qt.UserRole)
         menu = QMenu(self)
 
-        act_y = None
-        act_a = None
-        act_s = None
-        act_d = None
-        act_n = None
-        act_q = None
+        act_y = act_a = act_s = act_d = act_n = act_q = None
         actions_kho_e = {}
 
         if not data.get("block"):
@@ -1990,11 +1933,8 @@ class MainWindow(QMainWindow):
             item.setText(f'[{data["kho_e_label"]}] {data.get("name", "N/A")} - {data.get("wms_id", "")}')
             item.setData(Qt.UserRole, data)
 
-            # Update firebase
             self.current_firebase_data[data["user_id"]] = data
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
-
-            # Đảm bảo Picker list truyền xuống wms update có chứa kho_e_group mới
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
             self.trigger_search_update()
@@ -2055,7 +1995,6 @@ class MainWindow(QMainWindow):
 
     def delete_selected_items(self):
         deleted_pickers = []
-
         for lb in self.listboxes.values():
             for item in list(lb.selectedItems()):
                 data = item.data(Qt.UserRole)
@@ -2066,8 +2005,7 @@ class MainWindow(QMainWindow):
         self.update_all_badges()
 
         if deleted_pickers:
-            for p in deleted_pickers:
-                p["urgent"] = "N"
+            for p in deleted_pickers: p["urgent"] = "N"
             wms_thread = WMSUpdateRuleThread("", deleted_pickers, self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
         self.trigger_search_update()
