@@ -23,14 +23,11 @@ from google.oauth2.service_account import Credentials
 # WAVE RULE GROUPS
 # =========================================================================
 WAVE_RULE_GROUPS = {
-    "NDD": ["VNVLDWR0157", "VNVLDWR0146", "VNVLDWR0147", "VNVLDWR0150",
-            "VNVLDWR0151", "VNVLDWR0152", "VNVLDWR0153"],
-    "D-": ["VNVLDWR0162", "VNVLDWR0163", "VNVLDWR0164", "VNVLDWR0165",
-           "VNVLDWR0166", "VNVLDWR0167", "VNVLDWR0168"],
-    "NDD Kho E": ["VNVLDWR0180", "VNVLDWR0181", "VNVLDWR0182", "VNVLDWR0183",
-                  "VNVLDWR0184", "VNVLDWR0185", "VNVLDWR0186", "VNVLDWR0187", "VNVLDWR0188"],
-    "D- Kho E": ["VNVLDWR0161", "VNVLDWR0169", "VNVLDWR0170", "VNVLDWR0171",
-                 "VNVLDWR0172", "VNVLDWR0173", "VNVLDWR0174", "VNVLDWR0175", "VNVLDWR0176"]
+    "SDD": ["VNVLDWR0200", "VNVLDWR0199", "VNVLDWR0197"],
+    "AHM": ["VNVLDWR0202", "VNVLDWR0203", "VNVLDWR0204"],
+    "NDD normal": ["VNVLDWR0192", "VNVLDWR0157"],
+    "NDD Phú Thái": ["VNVLDWR0193", "VNVLDWR0194"],
+    "D-": ["VNVLDWR0196", "VNVLDWR0195"]
 }
 
 # --- CONSTANTS ---
@@ -1146,15 +1143,16 @@ class MainWindow(QMainWindow):
         self.dynamic_task_counts = {}
         self.flow_task_counts = {}
         self.flow_ssaq_counts = {}
-        self.kho_e_task_counts = {}
+        self.kho_e_task_counts = {}  # Lưu đếm task của kho E
 
         self.badges = {}
 
         self.current_toggle_states = {
-            "NDD": False,
-            "D-": False,
-            "NDD Kho E": False,
-            "D- Kho E": False
+            "SDD": False,
+            "AHM": False,
+            "NDD normal": False,
+            "NDD Phú Thái": False,
+            "D-": False
         }
 
         self.init_ui()
@@ -1176,10 +1174,11 @@ class MainWindow(QMainWindow):
             "Block B": self.txt_cfg_b.text().strip(),
             "Block C": self.txt_cfg_c.text().strip(),
             "Block E": self.txt_cfg_e.text().strip(),
-            "NDD": self.toggle_ndd.isChecked(),
-            "D-": self.toggle_dminus.isChecked(),
-            "NDD Kho E": self.toggle_ndd_e.isChecked(),
-            "D- Kho E": self.toggle_dminus_e.isChecked()
+            "SDD": self.toggle_sdd.isChecked(),
+            "AHM": self.toggle_ahm.isChecked(),
+            "NDD normal": self.toggle_ndd_normal.isChecked(),
+            "NDD Phú Thái": self.toggle_ndd_phu_thai.isChecked(),
+            "D-": self.toggle_dminus.isChecked()
         }
 
     def init_ui(self):
@@ -1350,19 +1349,25 @@ class MainWindow(QMainWindow):
             f"font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; color: #9333EA; border: none; margin-top: 4px;")
         config_layout.addWidget(lbl_dynamic_title, 5, 0, 1, 2)
 
-        self.toggle_ndd = ToggleSwitch()
+        self.toggle_sdd = ToggleSwitch()
+        self.toggle_ahm = ToggleSwitch()
+        self.toggle_ndd_normal = ToggleSwitch()
+        self.toggle_ndd_phu_thai = ToggleSwitch()
         self.toggle_dminus = ToggleSwitch()
-        self.toggle_ndd_e = ToggleSwitch()
-        self.toggle_dminus_e = ToggleSwitch()
 
-        self.toggle_ndd.clicked.connect(lambda checked, name="NDD": self.on_toggle_changed(name))
+        # Bắt thêm tham số checked để tránh lỗi ẩn TypeError từ thư viện PyQt5
+        self.toggle_sdd.clicked.connect(lambda checked, name="SDD": self.on_toggle_changed(name))
+        self.toggle_ahm.clicked.connect(lambda checked, name="AHM": self.on_toggle_changed(name))
+        self.toggle_ndd_normal.clicked.connect(lambda checked, name="NDD normal": self.on_toggle_changed(name))
+        self.toggle_ndd_phu_thai.clicked.connect(lambda checked, name="NDD Phú Thái": self.on_toggle_changed(name))
         self.toggle_dminus.clicked.connect(lambda checked, name="D-": self.on_toggle_changed(name))
-        self.toggle_ndd_e.clicked.connect(lambda checked, name="NDD Kho E": self.on_toggle_changed(name))
-        self.toggle_dminus_e.clicked.connect(lambda checked, name="D- Kho E": self.on_toggle_changed(name))
 
         for idx, (lbl_text, toggle_widget) in enumerate(
-                [("NDD:", self.toggle_ndd), ("D-:", self.toggle_dminus), ("NDD Kho E:", self.toggle_ndd_e),
-                 ("D- Kho E:", self.toggle_dminus_e)]):
+                [("SDD:", self.toggle_sdd),
+                 ("AHM:", self.toggle_ahm),
+                 ("NDD normal:", self.toggle_ndd_normal),
+                 ("NDD Phú Thái:", self.toggle_ndd_phu_thai),
+                 ("D-:", self.toggle_dminus)]):
             lbl = QLabel(lbl_text)
             lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
             config_layout.addWidget(lbl, 6 + idx, 0)
@@ -1371,7 +1376,7 @@ class MainWindow(QMainWindow):
         self.btn_edit_config = QPushButton("Chỉnh sửa")
         self.btn_edit_config.setStyleSheet("margin-top: 8px;")
         self.btn_edit_config.clicked.connect(self.toggle_config_edit)
-        config_layout.addWidget(self.btn_edit_config, 11, 0, 1, 2)
+        config_layout.addWidget(self.btn_edit_config, 12, 0, 1, 2)
 
         normal_grid.addWidget(config_frame, 0, 4, 2, 1)
 
@@ -1499,10 +1504,11 @@ class MainWindow(QMainWindow):
 
     def on_toggle_changed(self, changed_toggle_name):
         new_states = {
-            "NDD": self.toggle_ndd.isChecked(),
-            "D-": self.toggle_dminus.isChecked(),
-            "NDD Kho E": self.toggle_ndd_e.isChecked(),
-            "D- Kho E": self.toggle_dminus_e.isChecked()
+            "SDD": self.toggle_sdd.isChecked(),
+            "AHM": self.toggle_ahm.isChecked(),
+            "NDD normal": self.toggle_ndd_normal.isChecked(),
+            "NDD Phú Thái": self.toggle_ndd_phu_thai.isChecked(),
+            "D-": self.toggle_dminus.isChecked()
         }
 
         rules_to_update = {}
@@ -2067,28 +2073,37 @@ class MainWindow(QMainWindow):
             self.txt_cfg_c.setText(config_dict.get("Block C", ""))
             self.txt_cfg_e.setText(config_dict.get("Block E", ""))
 
-            self.toggle_ndd.blockSignals(True)
+            self.toggle_sdd.blockSignals(True)
+            self.toggle_ahm.blockSignals(True)
+            self.toggle_ndd_normal.blockSignals(True)
+            self.toggle_ndd_phu_thai.blockSignals(True)
             self.toggle_dminus.blockSignals(True)
-            self.toggle_ndd_e.blockSignals(True)
-            self.toggle_dminus_e.blockSignals(True)
 
-            is_ndd = _parse_bool(config_dict.get("NDD", False))
+            is_sdd = _parse_bool(config_dict.get("SDD", False))
+            is_ahm = _parse_bool(config_dict.get("AHM", False))
+            is_ndd_normal = _parse_bool(config_dict.get("NDD normal", False))
+            is_ndd_phu_thai = _parse_bool(config_dict.get("NDD Phú Thái", False))
             is_dminus = _parse_bool(config_dict.get("D-", False))
-            is_ndd_e = _parse_bool(config_dict.get("NDD Kho E", False))
-            is_dminus_e = _parse_bool(config_dict.get("D- Kho E", False))
 
-            self.toggle_ndd.setChecked(is_ndd)
+            self.toggle_sdd.setChecked(is_sdd)
+            self.toggle_ahm.setChecked(is_ahm)
+            self.toggle_ndd_normal.setChecked(is_ndd_normal)
+            self.toggle_ndd_phu_thai.setChecked(is_ndd_phu_thai)
             self.toggle_dminus.setChecked(is_dminus)
-            self.toggle_ndd_e.setChecked(is_ndd_e)
-            self.toggle_dminus_e.setChecked(is_dminus_e)
 
-            self.current_toggle_states = {"NDD": is_ndd, "D-": is_dminus, "NDD Kho E": is_ndd_e,
-                                          "D- Kho E": is_dminus_e}
+            self.current_toggle_states = {
+                "SDD": is_sdd,
+                "AHM": is_ahm,
+                "NDD normal": is_ndd_normal,
+                "NDD Phú Thái": is_ndd_phu_thai,
+                "D-": is_dminus
+            }
 
-            self.toggle_ndd.blockSignals(False)
+            self.toggle_sdd.blockSignals(False)
+            self.toggle_ahm.blockSignals(False)
+            self.toggle_ndd_normal.blockSignals(False)
+            self.toggle_ndd_phu_thai.blockSignals(False)
             self.toggle_dminus.blockSignals(False)
-            self.toggle_ndd_e.blockSignals(False)
-            self.toggle_dminus_e.blockSignals(False)
 
         if pickers_dict is None:
             self.lbl_status.setText("❌ Lỗi đồng bộ Firebase!")
