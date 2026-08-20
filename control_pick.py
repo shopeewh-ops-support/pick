@@ -25,8 +25,8 @@ from google.oauth2.service_account import Credentials
 WAVE_RULE_GROUPS = {
     "SDD": ["VNVLDWR0200", "VNVLDWR0199", "VNVLDWR0197"],
     "AHM": ["VNVLDWR0202", "VNVLDWR0203", "VNVLDWR0204"],
-    "NDD normal": ["VNVLDWR0192", "VNVLDWR0157"],
-    "NDD Phú Thái": ["VNVLDWR0193", "VNVLDWR0194"],
+    "NDD normal": ["VNVLDWR0157"],
+    "NDD Phú Thái": ["VNVLDWR0194"],
     "D-": ["VNVLDWR0196", "VNVLDWR0195"]
 }
 
