@@ -23,8 +23,8 @@ from google.oauth2.service_account import Credentials
 # WAVE RULE GROUPS
 # =========================================================================
 WAVE_RULE_GROUPS = {
-    "SDD": ["VNVLDWR0200", "VNVLDWR0199", "VNVLDWR0197"],
-    "AHM": ["VNVLDWR0202", "VNVLDWR0203", "VNVLDWR0204"],
+    "SDD": ["VNVLDWR0200", "VNVLDWR0213", "VNVLDWR0214"],
+    "AHM": ["VNVLDWR0215", "VNVLDWR0216", "VNVLDWR0217"],
     "NDD normal": ["VNVLDWR0157"],
     "NDD Phú Thái": ["VNVLDWR0194"],
     "D-": ["VNVLDWR0196", "VNVLDWR0195"]
@@ -423,6 +423,8 @@ class WMSUpdateRuleThread(QThread):
         urgent_dmx_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "D"]
         normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") in ["N", "", None]]
 
+        # ... (code lấy danh sách staff) ...
+
         if is_none:
             all_staff = urgent_all_staff + urgent_ahm_staff + urgent_sdd_staff + urgent_dmx_staff + normal_staff
             do_post(all_staff, ["SA4"], ["SA4"], ["50011", "50021", "50032"], ["VNVLFPOG0053"])
@@ -433,10 +435,16 @@ class WMSUpdateRuleThread(QThread):
             do_post(flow_ssaq_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0189"])
         else:
             target_z_list = list(normal_zones) if normal_zones else ["SA4"]
+
+            # Gán đơn bình thường
             do_post(normal_staff, target_z_list, ["SA4"], ["50011", "50021", "50032"], ["VNVLFPOG0053"])
-            do_post(urgent_all_staff, target_z_list, ["SA4"], ["50033", "50051", "50044"], ["VNVLFPOG0053"])
+
+            # SỬA 2 DÒNG DƯỚI ĐÂY: Bổ sung "50057"
+            do_post(urgent_all_staff, target_z_list, ["SA4"], ["50033", "50044", "50051", "50057"], ["VNVLFPOG0053"])
             do_post(urgent_ahm_staff, target_z_list, ["SA4"], ["50033", "50044"], ["VNVLFPOG0053"])
-            do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50051"], ["VNVLFPOG0053"])
+            do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50051", "50057"], ["VNVLFPOG0053"])
+
+            # Gán đơn ĐMX
             do_post(urgent_dmx_staff, target_z_list, ["SA4"], ["50025"], ["VNVLFPOG0053"])
 
 
@@ -610,10 +618,11 @@ class FetchDynamicTasksThread(QThread):
                 batch_list = data.get("list", [])
                 total = data.get("total", 0)
 
-                for task in batch_list:
+                for task in batch_list:  # (hoặc all_tasks)
                     channels = set(str(c) for c in task.get("channel_id_list", []))
+
                     has_ahm = bool(channels & {"50033", "50044"})
-                    has_sdd = bool(channels & {"50051"})
+                    has_sdd = bool(channels & {"50051", "50057"})
                     has_dmx = bool(channels & {"50025"})
 
                     special_count = sum([has_ahm, has_sdd, has_dmx])
