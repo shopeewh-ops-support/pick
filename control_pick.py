@@ -440,9 +440,9 @@ class WMSUpdateRuleThread(QThread):
             do_post(normal_staff, target_z_list, ["SA4"], ["50011", "50021", "50032"], ["VNVLFPOG0053"])
 
             # SỬA 2 DÒNG DƯỚI ĐÂY: Bổ sung "50057"
-            do_post(urgent_all_staff, target_z_list, ["SA4"], ["50033", "50044", "50051", "50057"], ["VNVLFPOG0053"])
+            do_post(urgent_all_staff, target_z_list, ["SA4"], ["50033", "50044", "50057"], ["VNVLFPOG0053"])
             do_post(urgent_ahm_staff, target_z_list, ["SA4"], ["50033", "50044"], ["VNVLFPOG0053"])
-            do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50051", "50057"], ["VNVLFPOG0053"])
+            do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50057"], ["VNVLFPOG0053"])
 
             # Gán đơn ĐMX
             do_post(urgent_dmx_staff, target_z_list, ["SA4"], ["50025"], ["VNVLFPOG0053"])
@@ -521,7 +521,7 @@ class FetchTasksThread(QThread):
             for task in all_tasks:
                 channels = set(str(c) for c in task.get("channel_id_list", []))
                 has_ahm = bool(channels & {"50033", "50044"})
-                has_sdd = bool(channels & {"50051"})
+                has_sdd = bool(channels & {"50057"})
                 has_dmx = bool(channels & {"50025"})
 
                 special_count = sum([has_ahm, has_sdd, has_dmx])
@@ -622,7 +622,7 @@ class FetchDynamicTasksThread(QThread):
                     channels = set(str(c) for c in task.get("channel_id_list", []))
 
                     has_ahm = bool(channels & {"50033", "50044"})
-                    has_sdd = bool(channels & {"50051", "50057"})
+                    has_sdd = bool(channels & {"50057"})
                     has_dmx = bool(channels & {"50025"})
 
                     special_count = sum([has_ahm, has_sdd, has_dmx])
