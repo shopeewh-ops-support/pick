@@ -1,3 +1,4 @@
+# STREAMING_CHUNK: Cập nhật import và khởi tạo giao diện
 import sys
 import time
 import traceback
@@ -174,6 +175,7 @@ def get_dynamic_qss(scale):
     """
 
 
+# STREAMING_CHUNK: Cập nhật hàm logic cập nhật skill
 def log_uncaught_exceptions(ex_cls, ex, tb):
     text = '{}: {}:\n'.format(ex_cls.__name__, ex)
     text += ''.join(traceback.format_tb(tb))
@@ -329,6 +331,10 @@ class WMSUpdateRuleThread(QThread):
         is_flow = self.target_zone in FLOW_ZONES
         is_none = self.target_zone == ""
 
+        # Lấy trạng thái Ca Ngày / Ca Đêm từ config để điều chỉnh channel 50057 cho normal
+        is_day_shift = self.config_data.get("DayShift", True)
+        normal_channels = ["50011", "50021", "50032", "50057"] if is_day_shift else ["50011", "50021", "50032"]
+
         if self.target_zone == "KHO_E":
             groups = {}
             for p in self.picker_list:
@@ -344,7 +350,7 @@ class WMSUpdateRuleThread(QThread):
                     "zone_id_list": ["SA4"],
                     "zone_hard_restrict": 1,
                     "zone_hard_restrict_apply_urgent": 1,
-                    "channel_id_list": ["50011", "50021", "50032"],
+                    "channel_id_list": normal_channels,
                     "channel_hard_restrict": 1,
                     "channel_hard_restrict_apply_urgent": 1,
                     "shop_id_list": [],
@@ -359,9 +365,13 @@ class WMSUpdateRuleThread(QThread):
                     "dynamic_wave_order_group_id_list": [-1]
                 }
                 try:
+                    print(f"\n--- [API POST Request - KHO E] ---")
+                    print(f"URL: {url_mass_adjust}")
+                    print(f"Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
                     res = requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
-                    print(
-                        f"\n[API CALLED] KHO_E Assigned (Group: {grp}, People: {len(staff_ids)}) -> Status: {res.status_code}")
+                    print(f"Response Status: {res.status_code}")
+                    print(f"Response Text: {res.text}")
+                    print(f"-----------------------------------\n")
                 except Exception as e:
                     print(f"[DEBUG] Lỗi API KHO_E: {e}")
             return
@@ -390,7 +400,7 @@ class WMSUpdateRuleThread(QThread):
             elif self.target_zone == "Block A&B&C":
                 normal_zones.update(cfg_a + cfg_b + cfg_c)
 
-        def do_post(staff_ids, zone_ids, flow_work_zones, channel_ids, group_ids):
+        def do_post(staff_ids, zone_ids, flow_work_zones, channel_ids, group_ids, role_name=""):
             if not staff_ids: return
             payload = {
                 "checkbox_bit_set": 29,
@@ -411,45 +421,48 @@ class WMSUpdateRuleThread(QThread):
                 "flow_pick_order_group_id_list": group_ids
             }
             try:
+                print(f"\n--- [API POST Request - {role_name}] ---")
+                print(f"URL: {url_mass_adjust}")
+                print(f"Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
                 res = requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
-                print(
-                    f"[API CALLED] mass_adjust_staff_picking_rule -> Zone: {self.target_zone} -> Status: {res.status_code}")
+                print(f"Response Status: {res.status_code}")
+                print(f"Response Text: {res.text}")
+                print(f"-----------------------------------\n")
             except Exception as e:
-                pass
+                print(f"[DEBUG] Lỗi Exception mass_adjust_staff_picking_rule: {e}")
 
         urgent_all_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "Y"]
         urgent_ahm_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "A"]
         urgent_sdd_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "S"]
         urgent_ndd_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "V"]
-        urgent_dmx_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "D"]
         normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") in ["N", "", None]]
 
         if is_none:
-            all_staff = urgent_all_staff + urgent_ahm_staff + urgent_sdd_staff + urgent_ndd_staff + urgent_dmx_staff + normal_staff
-            do_post(all_staff, ["SA4"], ["SA4"], ["50011", "50021", "50032"], ["VNVLFPOG0053"])
+            all_staff = urgent_all_staff + urgent_ahm_staff + urgent_sdd_staff + urgent_ndd_staff + normal_staff
+            do_post(all_staff, ["SA4"], ["SA4"], normal_channels, ["VNVLFPOG0053"], "Unassigned Staff")
         elif is_flow:
             flow_ssaq_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "Q"]
             flow_normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") != "Q"]
-            do_post(flow_normal_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0134"])
-            do_post(flow_ssaq_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0189"])
+            do_post(flow_normal_staff, ["SA4"], [self.target_zone], normal_channels, ["VNVLFPOG0134"], "Flow Normal")
+            do_post(flow_ssaq_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0189"],
+                    "Flow SSAQ")
         else:
             target_z_list = list(normal_zones) if normal_zones else ["SA4"]
 
-            # Gán đơn bình thường
-            do_post(normal_staff, target_z_list, ["SA4"], ["50011", "50021", "50032"], ["VNVLFPOG0053"])
+            # Gán đơn bình thường (Normal pickers sẽ mất hoặc nhận thêm 50057 theo ca)
+            do_post(normal_staff, target_z_list, ["SA4"], normal_channels, ["VNVLFPOG0053"], "Normal Staff")
 
-            # Hỏa Tốc Chung (Bỏ 50057)
-            do_post(urgent_all_staff, target_z_list, ["SA4"], ["50033", "50044", "50051"], ["VNVLFPOG0053"])
-            do_post(urgent_ahm_staff, target_z_list, ["SA4"], ["50033", "50044"], ["VNVLFPOG0053"])
-            do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50051"], ["VNVLFPOG0053"])
+            # Hỏa Tốc Chung
+            do_post(urgent_all_staff, target_z_list, ["SA4"], ["50033", "50044", "50051"], ["VNVLFPOG0053"],
+                    "Express All")
+            do_post(urgent_ahm_staff, target_z_list, ["SA4"], ["50033", "50044"], ["VNVLFPOG0053"], "AHM Staff")
+            do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50051"], ["VNVLFPOG0053"], "SDD Staff")
 
             # Gán đơn NDD (Chỉ 50057)
-            do_post(urgent_ndd_staff, target_z_list, ["SA4"], ["50057"], ["VNVLFPOG0053"])
-
-            # Gán đơn ĐMX
-            do_post(urgent_dmx_staff, target_z_list, ["SA4"], ["50025"], ["VNVLFPOG0053"])
+            do_post(urgent_ndd_staff, target_z_list, ["SA4"], ["50057"], ["VNVLFPOG0053"], "NDD Staff")
 
 
+# STREAMING_CHUNK: Cập nhật hàm logic đếm tác vụ (Loại bỏ DMX)
 class FetchTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
 
@@ -463,12 +476,14 @@ class FetchTasksThread(QThread):
             self.tasks_fetched.emit({})
             return
 
-        counts = {block: {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "dmx": 0, "oth": 0} for block in NORMAL_BLOCKS}
+        counts = {block: {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0} for block in NORMAL_BLOCKS}
 
         cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
         cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
         cfg_c = set([z.strip() for z in self.config_data.get("Block C", "").split(",") if z.strip()])
         cfg_e = set([z.strip() for z in self.config_data.get("Block E", "").split(",") if z.strip()])
+
+        is_day_shift = self.config_data.get("DayShift", True)
 
         now = datetime.datetime.now()
         start_date = now - datetime.timedelta(days=6)
@@ -525,22 +540,27 @@ class FetchTasksThread(QThread):
                 has_ahm = bool(channels & {"50033", "50044"})
                 has_sdd = bool(channels & {"50051"})
                 has_ndd = bool(channels & {"50057"})
-                has_dmx = bool(channels & {"50025"})
+                has_normal = bool(channels - {"50033", "50044", "50051", "50057"})
 
-                special_count = sum([has_ahm, has_sdd, has_ndd, has_dmx])
+                other_special = sum([has_ahm, has_sdd])
 
-                if special_count > 1:
-                    task_type = "oth"
-                elif has_ahm:
-                    task_type = "ahm"
-                elif has_sdd:
-                    task_type = "sdd"
-                elif has_ndd:
-                    task_type = "ndd"
-                elif has_dmx:
-                    task_type = "dmx"
+                # Logic đặc biệt cho 50057
+                if has_ndd:
+                    if not has_ahm and not has_sdd and not has_normal:
+                        task_type = "ndd"
+                    elif is_day_shift and not has_ahm and not has_sdd and has_normal:
+                        task_type = "normal"
+                    else:
+                        task_type = "oth"
                 else:
-                    task_type = "normal"
+                    if other_special > 1:
+                        task_type = "oth"
+                    elif has_ahm:
+                        task_type = "ahm"
+                    elif has_sdd:
+                        task_type = "sdd"
+                    else:
+                        task_type = "normal"
 
                 z_str = task.get("zone_list", "")
                 t_zones = set([z.strip() for z in z_str.split(",") if z.strip()])
@@ -586,12 +606,14 @@ class FetchDynamicTasksThread(QThread):
             self.tasks_fetched.emit({})
             return
 
-        counts = {block: {"normal": set(), "ahm": 0, "sdd": 0, "ndd": 0, "dmx": 0, "oth": 0} for block in NORMAL_BLOCKS}
+        counts = {block: {"normal": set(), "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0} for block in NORMAL_BLOCKS}
 
         cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
         cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
         cfg_c = set([z.strip() for z in self.config_data.get("Block C", "").split(",") if z.strip()])
         cfg_e = set([z.strip() for z in self.config_data.get("Block E", "").split(",") if z.strip()])
+
+        is_day_shift = self.config_data.get("DayShift", True)
 
         headers = {
             "Sec-CH-UA": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
@@ -627,22 +649,27 @@ class FetchDynamicTasksThread(QThread):
                     has_ahm = bool(channels & {"50033", "50044"})
                     has_sdd = bool(channels & {"50051"})
                     has_ndd = bool(channels & {"50057"})
-                    has_dmx = bool(channels & {"50025"})
+                    has_normal = bool(channels - {"50033", "50044", "50051", "50057"})
 
-                    special_count = sum([has_ahm, has_sdd, has_ndd, has_dmx])
+                    other_special = sum([has_ahm, has_sdd])
 
-                    if special_count > 1:
-                        task_type = "oth"
-                    elif has_ahm:
-                        task_type = "ahm"
-                    elif has_sdd:
-                        task_type = "sdd"
-                    elif has_ndd:
-                        task_type = "ndd"
-                    elif has_dmx:
-                        task_type = "dmx"
+                    # Logic đặc biệt cho 50057
+                    if has_ndd:
+                        if not has_ahm and not has_sdd and not has_normal:
+                            task_type = "ndd"
+                        elif is_day_shift and not has_ahm and not has_sdd and has_normal:
+                            task_type = "normal"
+                        else:
+                            task_type = "oth"
                     else:
-                        task_type = "normal"
+                        if other_special > 1:
+                            task_type = "oth"
+                        elif has_ahm:
+                            task_type = "ahm"
+                        elif has_sdd:
+                            task_type = "sdd"
+                        else:
+                            task_type = "normal"
 
                     pickup_id = task.get("pickup_id")
 
@@ -690,7 +717,6 @@ class FetchDynamicTasksThread(QThread):
                     "ahm": v["ahm"],
                     "sdd": v["sdd"],
                     "ndd": v["ndd"],
-                    "dmx": v["dmx"],
                     "oth": v["oth"]
                 } for k, v in counts.items()
             }
@@ -701,6 +727,7 @@ class FetchDynamicTasksThread(QThread):
             self.tasks_fetched.emit({})
 
 
+# STREAMING_CHUNK: Các logic kết nối dữ liệu Firebase, Threads, Update
 class FetchFlowTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
 
@@ -1016,6 +1043,7 @@ class FetchFirebaseThread(QThread):
             self.data_fetched.emit(None, None)
 
 
+# STREAMING_CHUNK: Giao diện kéo thả và hiển thị Picker
 class ScanTextEdit(QTextEdit):
     enter_pressed = pyqtSignal(str)
 
@@ -1126,8 +1154,6 @@ class ZoneListWidget(QListWidget):
                             prefix = "🪼 "
                         elif urg == "V":
                             prefix = "🚀 "
-                        elif urg == "D":
-                            prefix = "🛒 "
                         elif urg == "Q":
                             prefix = "⚧️ "
 
@@ -1194,9 +1220,11 @@ class MainWindow(QMainWindow):
             "AHM": self.toggle_ahm.isChecked(),
             "NDD normal": self.toggle_ndd_normal.isChecked(),
             "NDD Phú Thái": self.toggle_ndd_phu_thai.isChecked(),
-            "D-": self.toggle_dminus.isChecked()
+            "D-": self.toggle_dminus.isChecked(),
+            "DayShift": self.btn_shift_toggle.isChecked()
         }
 
+    # STREAMING_CHUNK: Setup Layout Main
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -1278,8 +1306,16 @@ class MainWindow(QMainWindow):
         self.btn_delete.setObjectName("btn_delete")
         self.btn_delete.clicked.connect(self.delete_selected_items)
 
+        self.btn_shift_toggle = QPushButton("☀️ Ca Ngày")
+        self.btn_shift_toggle.setCheckable(True)
+        self.btn_shift_toggle.setChecked(True)
+        self.btn_shift_toggle.setStyleSheet(
+            "background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+        self.btn_shift_toggle.clicked.connect(self.on_shift_toggle_changed)
+
         btn_vbox.addWidget(btn_refresh)
         btn_vbox.addWidget(self.btn_delete)
+        btn_vbox.addWidget(self.btn_shift_toggle)
         scan_box_layout.addLayout(btn_vbox, stretch=2)
 
         header_layout.addWidget(scan_frame)
@@ -1371,7 +1407,6 @@ class MainWindow(QMainWindow):
         self.toggle_ndd_phu_thai = ToggleSwitch()
         self.toggle_dminus = ToggleSwitch()
 
-        # Bắt thêm tham số checked để tránh lỗi ẩn TypeError từ thư viện PyQt5
         self.toggle_sdd.clicked.connect(lambda checked, name="SDD": self.on_toggle_changed(name))
         self.toggle_ahm.clicked.connect(lambda checked, name="AHM": self.on_toggle_changed(name))
         self.toggle_ndd_normal.clicked.connect(lambda checked, name="NDD normal": self.on_toggle_changed(name))
@@ -1444,6 +1479,30 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(workspace_layout)
 
+    def on_shift_toggle_changed(self):
+        if self.btn_shift_toggle.isChecked():
+            self.btn_shift_toggle.setText("☀️ Ca Ngày")
+            self.btn_shift_toggle.setStyleSheet(
+                "background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+        else:
+            self.btn_shift_toggle.setText("🌙 Ca Đêm")
+            self.btn_shift_toggle.setStyleSheet(
+                "background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+
+        self.refresh_wms_tasks()
+
+        # Cập nhật quyền cho tất cả nhân viên ngay khi đổi ca
+        block_users = {}
+        for uid, data in self.current_firebase_data.items():
+            block = data.get("block", "")
+            if block not in block_users:
+                block_users[block] = []
+            block_users[block].append(data)
+
+        for block, users in block_users.items():
+            wms_thread = WMSUpdateRuleThread(block, users, self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
+
     def on_search_text_changed(self, text):
         search_term = remove_accents(text.strip().lower())
         match_count = 0
@@ -1478,8 +1537,6 @@ class MainWindow(QMainWindow):
                         prefix = "🪼 "
                     elif urg == "V":
                         prefix = "🚀 "
-                    elif urg == "D":
-                        prefix = "🛒 "
                     elif urg == "Q":
                         prefix = "⚧️ "
 
@@ -1570,6 +1627,7 @@ class MainWindow(QMainWindow):
         self.btn_tab_flow.style().unpolish(self.btn_tab_flow)
         self.btn_tab_flow.style().polish(self.btn_tab_flow)
 
+    # STREAMING_CHUNK: Setup UI từng khung trong Normal và Flow
     def create_zone_box(self, parent_layout, zone_id, top_border_color, row, col, is_grid=False, show_badge=True,
                         colspan=1, is_left_panel=False, watermark_text=None):
         box_frame = QFrame()
@@ -1640,7 +1698,7 @@ class MainWindow(QMainWindow):
                     f"background-color: #FFFFFF; color: #3B82F6; font-weight: 600; border: 1px solid #BFDBFE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
                 lbl_normal.setAlignment(Qt.AlignCenter)
 
-                lbl_urgent = QLabel("Hỏa Tốc\n🅰️ AHM: 0\n🪼 SDD: 0\n🚀 NDD: 0\n📦 Mix: 0\n🛒 ĐMX: 0")
+                lbl_urgent = QLabel("Hỏa Tốc\n🅰️ AHM: 0\n🪼 SDD: 0\n🚀 NDD: 0\n📦 Mix: 0")
                 lbl_urgent.setStyleSheet(
                     f"background-color: #FFFFFF; color: #EF4444; font-weight: 600; border: 1px solid #FECACA; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
                 lbl_urgent.setAlignment(Qt.AlignCenter)
@@ -1719,10 +1777,8 @@ class MainWindow(QMainWindow):
                     if "mgtl" in b_dict: b_dict["mgtl"].setText(f"MGTL\n📦 {counts.get('MGTL', 0)}")
                     if "gd" in b_dict: b_dict["gd"].setText(f"Gia Dụng\n📦 {counts.get('GD', 0)}")
                 elif z_id in NORMAL_BLOCKS:
-                    task_data = self.task_counts.get(z_id,
-                                                     {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "dmx": 0, "oth": 0})
-                    dyn_data = self.dynamic_task_counts.get(z_id, {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "dmx": 0,
-                                                                   "oth": 0})
+                    task_data = self.task_counts.get(z_id, {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0})
+                    dyn_data = self.dynamic_task_counts.get(z_id, {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0})
 
                     t_norm = task_data.get("normal", 0) + dyn_data.get("normal", 0)
                     d_norm = dyn_data.get("normal", 0)
@@ -1730,12 +1786,11 @@ class MainWindow(QMainWindow):
                     t_ahm = task_data.get("ahm", 0) + dyn_data.get("ahm", 0)
                     t_sdd = task_data.get("sdd", 0) + dyn_data.get("sdd", 0)
                     t_ndd = task_data.get("ndd", 0) + dyn_data.get("ndd", 0)
-                    t_dmx = task_data.get("dmx", 0) + dyn_data.get("dmx", 0)
                     t_oth = task_data.get("oth", 0) + dyn_data.get("oth", 0)
 
                     b_dict["normal"].setText(f"Normal\n📦 Wave: {task_data.get('normal', 0)}\n⚡ Auto: {d_norm}")
                     b_dict["urgent"].setText(
-                        f"Hỏa Tốc\n🅰️ AHM: {t_ahm}\n🪼 SDD: {t_sdd}\n🚀 NDD: {t_ndd}\n📦 Mix: {t_oth}\n🛒 ĐMX: {t_dmx}")
+                        f"Hỏa Tốc\n🅰️ AHM: {t_ahm}\n🪼 SDD: {t_sdd}\n🚀 NDD: {t_ndd}\n📦 Mix: {t_oth}")
                 elif z_id in FLOW_ZONES:
                     f_qty = self.flow_task_counts.get(z_id, 0)
                     q_qty = self.flow_ssaq_counts.get(z_id, 0)
@@ -1767,6 +1822,7 @@ class MainWindow(QMainWindow):
         self.lbl_status.setText(f"❌ Lỗi: {err}")
         self.lbl_status.setStyleSheet("color: #EF4444;")
 
+    # STREAMING_CHUNK: Menu Tùy Chọn và Xử Lý Thao Tác Kéo Thả
     def on_scan_triggered(self, text):
         self.txt_scan.clear()
         if not text.strip(): return
@@ -1817,8 +1873,6 @@ class MainWindow(QMainWindow):
                 prefix = "🪼 "
             elif urg == "V":
                 prefix = "🚀 "
-            elif urg == "D":
-                prefix = "🛒 "
             elif urg == "Q":
                 prefix = "⚧️ "
 
@@ -1873,8 +1927,6 @@ class MainWindow(QMainWindow):
                 data["urgent"] = "S"
             elif urgent_state == "S":
                 data["urgent"] = "V"
-            elif urgent_state == "V":
-                data["urgent"] = "D"
             else:
                 data["urgent"] = "N"
 
@@ -1889,8 +1941,6 @@ class MainWindow(QMainWindow):
                 prefix = "🪼 "
             elif urg == "V":
                 prefix = "🚀 "
-            elif urg == "D":
-                prefix = "🛒 "
             elif urg == "Q":
                 prefix = "⚧️ "
         item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
@@ -1909,7 +1959,7 @@ class MainWindow(QMainWindow):
         data = item.data(Qt.UserRole)
         menu = QMenu(self)
 
-        act_y = act_a = act_s = act_v = act_d = act_n = act_q = None
+        act_y = act_a = act_s = act_v = act_n = act_q = None
         actions_kho_e = {}
 
         if not data.get("block"):
@@ -1931,8 +1981,7 @@ class MainWindow(QMainWindow):
             act_y = menu.addAction("🔥 Gán Tất Cả Express")
             act_a = menu.addAction("🅰️ Gán Tất Cả AHM")
             act_s = menu.addAction("🪼 Gán SDD")
-            act_v = menu.addAction("🚀 Gán NDD (50057)")
-            act_d = menu.addAction("🛒 Gán ĐMX")
+            act_v = menu.addAction("🚀 Gán NDD")
 
         menu.addSeparator()
         act_del = menu.addAction("❌ Xóa nhân sự")
@@ -2002,15 +2051,6 @@ class MainWindow(QMainWindow):
         elif act_v and action == act_v:
             data["urgent"] = "V"
             item.setText(f'🚀 {data.get("name", "N/A")} - {data.get("wms_id", "")}')
-            item.setData(Qt.UserRole, data)
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        elif act_d and action == act_d:
-            data["urgent"] = "D"
-            item.setText(f'🛒 {data.get("name", "N/A")} - {data.get("wms_id", "")}')
             item.setData(Qt.UserRole, data)
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
@@ -2121,6 +2161,20 @@ class MainWindow(QMainWindow):
             is_ndd_phu_thai = _parse_bool(config_dict.get("NDD Phú Thái", False))
             is_dminus = _parse_bool(config_dict.get("D-", False))
 
+            # Khôi phục trạng thái ca
+            is_day_shift = _parse_bool(config_dict.get("DayShift", True))
+            self.btn_shift_toggle.blockSignals(True)
+            self.btn_shift_toggle.setChecked(is_day_shift)
+            if is_day_shift:
+                self.btn_shift_toggle.setText("☀️ Ca Ngày")
+                self.btn_shift_toggle.setStyleSheet(
+                    "background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+            else:
+                self.btn_shift_toggle.setText("🌙 Ca Đêm")
+                self.btn_shift_toggle.setStyleSheet(
+                    "background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+            self.btn_shift_toggle.blockSignals(False)
+
             self.toggle_sdd.setChecked(is_sdd)
             self.toggle_ahm.setChecked(is_ahm)
             self.toggle_ndd_normal.setChecked(is_ndd_normal)
@@ -2182,8 +2236,6 @@ class MainWindow(QMainWindow):
                     prefix = "🪼 "
                 elif urg == "V":
                     prefix = "🚀 "
-                elif urg == "D":
-                    prefix = "🛒 "
                 elif urg == "Q":
                     prefix = "⚧️ "
 
