@@ -1974,10 +1974,10 @@ class MainWindow(QMainWindow):
         elif data.get("block") not in FLOW_ZONES:
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
             menu.addSeparator()
-            act_y = menu.addAction("🔥 Gán Tất Cả Express")
+            act_y = menu.addAction("🔥 Gán Tất Cả Đơn Hỏa Tốc")
             act_a = menu.addAction("🅰️ Gán Tất Cả AHM")
             act_s = menu.addAction("🪼 Gán SDD")
-            act_v = menu.addAction("🚀 Gán NDD (50057)")
+            act_v = menu.addAction("🚀 Gán NDD")
 
         menu.addSeparator()
         act_del = menu.addAction("❌ Xóa nhân sự")
