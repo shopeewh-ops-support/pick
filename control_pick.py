@@ -1,4 +1,3 @@
-# STREAMING_CHUNK: Cập nhật import và khởi tạo giao diện
 import sys
 import time
 import traceback
@@ -175,7 +174,6 @@ def get_dynamic_qss(scale):
     """
 
 
-# STREAMING_CHUNK: Cập nhật hàm logic cập nhật skill
 def log_uncaught_exceptions(ex_cls, ex, tb):
     text = '{}: {}:\n'.format(ex_cls.__name__, ex)
     text += ''.join(traceback.format_tb(tb))
@@ -462,7 +460,6 @@ class WMSUpdateRuleThread(QThread):
             do_post(urgent_ndd_staff, target_z_list, ["SA4"], ["50057"], ["VNVLFPOG0053"], "NDD Staff")
 
 
-# STREAMING_CHUNK: Cập nhật hàm logic đếm tác vụ (Loại bỏ DMX)
 class FetchTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
 
@@ -727,7 +724,6 @@ class FetchDynamicTasksThread(QThread):
             self.tasks_fetched.emit({})
 
 
-# STREAMING_CHUNK: Các logic kết nối dữ liệu Firebase, Threads, Update
 class FetchFlowTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
 
@@ -1043,7 +1039,6 @@ class FetchFirebaseThread(QThread):
             self.data_fetched.emit(None, None)
 
 
-# STREAMING_CHUNK: Giao diện kéo thả và hiển thị Picker
 class ScanTextEdit(QTextEdit):
     enter_pressed = pyqtSignal(str)
 
@@ -1224,7 +1219,6 @@ class MainWindow(QMainWindow):
             "DayShift": self.btn_shift_toggle.isChecked()
         }
 
-    # STREAMING_CHUNK: Setup Layout Main
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -1489,6 +1483,10 @@ class MainWindow(QMainWindow):
             self.btn_shift_toggle.setStyleSheet(
                 "background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
 
+        # Lưu cấu hình (bao gồm trạng thái Ca) lên Firebase ngay lập tức
+        config_data = self.get_current_config()
+        self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
+
         self.refresh_wms_tasks()
 
         # Cập nhật quyền cho tất cả nhân viên ngay khi đổi ca
@@ -1627,7 +1625,6 @@ class MainWindow(QMainWindow):
         self.btn_tab_flow.style().unpolish(self.btn_tab_flow)
         self.btn_tab_flow.style().polish(self.btn_tab_flow)
 
-    # STREAMING_CHUNK: Setup UI từng khung trong Normal và Flow
     def create_zone_box(self, parent_layout, zone_id, top_border_color, row, col, is_grid=False, show_badge=True,
                         colspan=1, is_left_panel=False, watermark_text=None):
         box_frame = QFrame()
@@ -1822,7 +1819,6 @@ class MainWindow(QMainWindow):
         self.lbl_status.setText(f"❌ Lỗi: {err}")
         self.lbl_status.setStyleSheet("color: #EF4444;")
 
-    # STREAMING_CHUNK: Menu Tùy Chọn và Xử Lý Thao Tác Kéo Thả
     def on_scan_triggered(self, text):
         self.txt_scan.clear()
         if not text.strip(): return
@@ -1981,7 +1977,7 @@ class MainWindow(QMainWindow):
             act_y = menu.addAction("🔥 Gán Tất Cả Express")
             act_a = menu.addAction("🅰️ Gán Tất Cả AHM")
             act_s = menu.addAction("🪼 Gán SDD")
-            act_v = menu.addAction("🚀 Gán NDD")
+            act_v = menu.addAction("🚀 Gán NDD (50057)")
 
         menu.addSeparator()
         act_del = menu.addAction("❌ Xóa nhân sự")
