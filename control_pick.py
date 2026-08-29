@@ -25,8 +25,10 @@ from google.oauth2.service_account import Credentials
 WAVE_RULE_GROUPS = {
     "SDD": ["VNVLDWR0200", "VNVLDWR0213", "VNVLDWR0214"],
     "AHM": ["VNVLDWR0215", "VNVLDWR0216", "VNVLDWR0217"],
-    "NDD normal": ["VNVLDWR0157"],
-    "NDD Phú Thái": ["VNVLDWR0194"],
+    "D-S NDD normal": ["VNVLDWR0157"],
+    "D-S NDD Phú Thái": ["VNVLDWR0194"],
+    "N-S NDD normal": ["VNVLDWR0226"],
+    "N-S NDD Phú Thái": ["VNVLDWR0227"],
     "D-": ["VNVLDWR0196", "VNVLDWR0195"]
 }
 
@@ -1187,8 +1189,10 @@ class MainWindow(QMainWindow):
         self.current_toggle_states = {
             "SDD": False,
             "AHM": False,
-            "NDD normal": False,
-            "NDD Phú Thái": False,
+            "D-S NDD normal": False,
+            "D-S NDD Phú Thái": False,
+            "N-S NDD normal": False,
+            "N-S NDD Phú Thái": False,
             "D-": False
         }
 
@@ -1213,8 +1217,10 @@ class MainWindow(QMainWindow):
             "Block E": self.txt_cfg_e.text().strip(),
             "SDD": self.toggle_sdd.isChecked(),
             "AHM": self.toggle_ahm.isChecked(),
-            "NDD normal": self.toggle_ndd_normal.isChecked(),
-            "NDD Phú Thái": self.toggle_ndd_phu_thai.isChecked(),
+            "D-S NDD normal": self.toggle_ds_ndd_normal.isChecked(),
+            "D-S NDD Phú Thái": self.toggle_ds_ndd_phu_thai.isChecked(),
+            "N-S NDD normal": self.toggle_ns_ndd_normal.isChecked(),
+            "N-S NDD Phú Thái": self.toggle_ns_ndd_phu_thai.isChecked(),
             "D-": self.toggle_dminus.isChecked(),
             "DayShift": self.btn_shift_toggle.isChecked()
         }
@@ -1397,21 +1403,30 @@ class MainWindow(QMainWindow):
 
         self.toggle_sdd = ToggleSwitch()
         self.toggle_ahm = ToggleSwitch()
-        self.toggle_ndd_normal = ToggleSwitch()
-        self.toggle_ndd_phu_thai = ToggleSwitch()
+        self.toggle_ds_ndd_normal = ToggleSwitch()
+        self.toggle_ds_ndd_phu_thai = ToggleSwitch()
+        self.toggle_ns_ndd_normal = ToggleSwitch()
+        self.toggle_ns_ndd_phu_thai = ToggleSwitch()
         self.toggle_dminus = ToggleSwitch()
 
+        # Bắt thêm tham số checked để tránh lỗi ẩn TypeError từ thư viện PyQt5
         self.toggle_sdd.clicked.connect(lambda checked, name="SDD": self.on_toggle_changed(name))
         self.toggle_ahm.clicked.connect(lambda checked, name="AHM": self.on_toggle_changed(name))
-        self.toggle_ndd_normal.clicked.connect(lambda checked, name="NDD normal": self.on_toggle_changed(name))
-        self.toggle_ndd_phu_thai.clicked.connect(lambda checked, name="NDD Phú Thái": self.on_toggle_changed(name))
+        self.toggle_ds_ndd_normal.clicked.connect(lambda checked, name="D-S NDD normal": self.on_toggle_changed(name))
+        self.toggle_ds_ndd_phu_thai.clicked.connect(
+            lambda checked, name="D-S NDD Phú Thái": self.on_toggle_changed(name))
+        self.toggle_ns_ndd_normal.clicked.connect(lambda checked, name="N-S NDD normal": self.on_toggle_changed(name))
+        self.toggle_ns_ndd_phu_thai.clicked.connect(
+            lambda checked, name="N-S NDD Phú Thái": self.on_toggle_changed(name))
         self.toggle_dminus.clicked.connect(lambda checked, name="D-": self.on_toggle_changed(name))
 
         for idx, (lbl_text, toggle_widget) in enumerate(
                 [("SDD:", self.toggle_sdd),
                  ("AHM:", self.toggle_ahm),
-                 ("NDD normal:", self.toggle_ndd_normal),
-                 ("NDD Phú Thái:", self.toggle_ndd_phu_thai),
+                 ("D-S NDD normal:", self.toggle_ds_ndd_normal),
+                 ("D-S NDD Phú Thái:", self.toggle_ds_ndd_phu_thai),
+                 ("N-S NDD normal:", self.toggle_ns_ndd_normal),
+                 ("N-S NDD Phú Thái:", self.toggle_ns_ndd_phu_thai),
                  ("D-:", self.toggle_dminus)]):
             lbl = QLabel(lbl_text)
             lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
@@ -1474,18 +1489,56 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(workspace_layout)
 
     def on_shift_toggle_changed(self):
-        if self.btn_shift_toggle.isChecked():
+        is_day = self.btn_shift_toggle.isChecked()
+        if is_day:
             self.btn_shift_toggle.setText("☀️ Ca Ngày")
             self.btn_shift_toggle.setStyleSheet(
                 "background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+
+            # Logic Tự động điều chỉnh UI cho Ca Ngày
+            self.toggle_ds_ndd_normal.setChecked(True)
+            self.toggle_ds_ndd_phu_thai.setChecked(True)
+            self.toggle_ns_ndd_normal.setChecked(False)
+            self.toggle_ns_ndd_phu_thai.setChecked(False)
         else:
             self.btn_shift_toggle.setText("🌙 Ca Đêm")
             self.btn_shift_toggle.setStyleSheet(
                 "background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
 
-        # Lưu cấu hình (bao gồm trạng thái Ca) lên Firebase ngay lập tức
+            # Logic Tự động điều chỉnh UI cho Ca Đêm
+            self.toggle_ds_ndd_normal.setChecked(False)
+            self.toggle_ds_ndd_phu_thai.setChecked(False)
+            self.toggle_ns_ndd_normal.setChecked(True)
+            self.toggle_ns_ndd_phu_thai.setChecked(True)
+
+        # Cập nhật Toggle Configuration lên Firebase và WMS
+        new_states = {
+            "SDD": self.toggle_sdd.isChecked(),
+            "AHM": self.toggle_ahm.isChecked(),
+            "D-S NDD normal": self.toggle_ds_ndd_normal.isChecked(),
+            "D-S NDD Phú Thái": self.toggle_ds_ndd_phu_thai.isChecked(),
+            "N-S NDD normal": self.toggle_ns_ndd_normal.isChecked(),
+            "N-S NDD Phú Thái": self.toggle_ns_ndd_phu_thai.isChecked(),
+            "D-": self.toggle_dminus.isChecked()
+        }
+
+        rules_to_update = {}
+        for k, v in new_states.items():
+            if v != self.current_toggle_states.get(k, False):
+                status_int = 1 if v else 0
+                for rule_id in WAVE_RULE_GROUPS.get(k, []):
+                    rules_to_update[rule_id] = status_int
+
+        self.current_toggle_states = new_states.copy()
         config_data = self.get_current_config()
         self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
+
+        if rules_to_update:
+            api_thread = WMSUpdateWaveRuleThread(self.wms_cookie, rules_to_update)
+            api_thread.finished_update.connect(self.on_wave_rules_updated)
+            self.start_thread(api_thread)
+            self.lbl_status.setText(f"⚡ Tự động cấu hình {len(rules_to_update)} Wave Rules khi đổi ca...")
+            self.lbl_status.setStyleSheet("color: #9333EA;")
 
         self.refresh_wms_tasks()
 
@@ -1579,8 +1632,10 @@ class MainWindow(QMainWindow):
         new_states = {
             "SDD": self.toggle_sdd.isChecked(),
             "AHM": self.toggle_ahm.isChecked(),
-            "NDD normal": self.toggle_ndd_normal.isChecked(),
-            "NDD Phú Thái": self.toggle_ndd_phu_thai.isChecked(),
+            "D-S NDD normal": self.toggle_ds_ndd_normal.isChecked(),
+            "D-S NDD Phú Thái": self.toggle_ds_ndd_phu_thai.isChecked(),
+            "N-S NDD normal": self.toggle_ns_ndd_normal.isChecked(),
+            "N-S NDD Phú Thái": self.toggle_ns_ndd_phu_thai.isChecked(),
             "D-": self.toggle_dminus.isChecked()
         }
 
@@ -1974,10 +2029,10 @@ class MainWindow(QMainWindow):
         elif data.get("block") not in FLOW_ZONES:
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
             menu.addSeparator()
-            act_y = menu.addAction("🔥 Gán Tất Cả Đơn Hỏa Tốc")
+            act_y = menu.addAction("🔥 Gán Tất Cả Express")
             act_a = menu.addAction("🅰️ Gán Tất Cả AHM")
             act_s = menu.addAction("🪼 Gán SDD")
-            act_v = menu.addAction("🚀 Gán NDD")
+            act_v = menu.addAction("🚀 Gán NDD (50057)")
 
         menu.addSeparator()
         act_del = menu.addAction("❌ Xóa nhân sự")
@@ -2147,14 +2202,18 @@ class MainWindow(QMainWindow):
 
             self.toggle_sdd.blockSignals(True)
             self.toggle_ahm.blockSignals(True)
-            self.toggle_ndd_normal.blockSignals(True)
-            self.toggle_ndd_phu_thai.blockSignals(True)
+            self.toggle_ds_ndd_normal.blockSignals(True)
+            self.toggle_ds_ndd_phu_thai.blockSignals(True)
+            self.toggle_ns_ndd_normal.blockSignals(True)
+            self.toggle_ns_ndd_phu_thai.blockSignals(True)
             self.toggle_dminus.blockSignals(True)
 
             is_sdd = _parse_bool(config_dict.get("SDD", False))
             is_ahm = _parse_bool(config_dict.get("AHM", False))
-            is_ndd_normal = _parse_bool(config_dict.get("NDD normal", False))
-            is_ndd_phu_thai = _parse_bool(config_dict.get("NDD Phú Thái", False))
+            is_ds_ndd_normal = _parse_bool(config_dict.get("D-S NDD normal", False))
+            is_ds_ndd_phu_thai = _parse_bool(config_dict.get("D-S NDD Phú Thái", False))
+            is_ns_ndd_normal = _parse_bool(config_dict.get("N-S NDD normal", False))
+            is_ns_ndd_phu_thai = _parse_bool(config_dict.get("N-S NDD Phú Thái", False))
             is_dminus = _parse_bool(config_dict.get("D-", False))
 
             # Khôi phục trạng thái ca
@@ -2173,22 +2232,28 @@ class MainWindow(QMainWindow):
 
             self.toggle_sdd.setChecked(is_sdd)
             self.toggle_ahm.setChecked(is_ahm)
-            self.toggle_ndd_normal.setChecked(is_ndd_normal)
-            self.toggle_ndd_phu_thai.setChecked(is_ndd_phu_thai)
+            self.toggle_ds_ndd_normal.setChecked(is_ds_ndd_normal)
+            self.toggle_ds_ndd_phu_thai.setChecked(is_ds_ndd_phu_thai)
+            self.toggle_ns_ndd_normal.setChecked(is_ns_ndd_normal)
+            self.toggle_ns_ndd_phu_thai.setChecked(is_ns_ndd_phu_thai)
             self.toggle_dminus.setChecked(is_dminus)
 
             self.current_toggle_states = {
                 "SDD": is_sdd,
                 "AHM": is_ahm,
-                "NDD normal": is_ndd_normal,
-                "NDD Phú Thái": is_ndd_phu_thai,
+                "D-S NDD normal": is_ds_ndd_normal,
+                "D-S NDD Phú Thái": is_ds_ndd_phu_thai,
+                "N-S NDD normal": is_ns_ndd_normal,
+                "N-S NDD Phú Thái": is_ns_ndd_phu_thai,
                 "D-": is_dminus
             }
 
             self.toggle_sdd.blockSignals(False)
             self.toggle_ahm.blockSignals(False)
-            self.toggle_ndd_normal.blockSignals(False)
-            self.toggle_ndd_phu_thai.blockSignals(False)
+            self.toggle_ds_ndd_normal.blockSignals(False)
+            self.toggle_ds_ndd_phu_thai.blockSignals(False)
+            self.toggle_ns_ndd_normal.blockSignals(False)
+            self.toggle_ns_ndd_phu_thai.blockSignals(False)
             self.toggle_dminus.blockSignals(False)
 
         if pickers_dict is None:
