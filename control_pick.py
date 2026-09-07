@@ -365,13 +365,7 @@ class WMSUpdateRuleThread(QThread):
                     "dynamic_wave_order_group_id_list": [-1]
                 }
                 try:
-                    print(f"\n--- [API POST Request - KHO E] ---")
-                    print(f"URL: {url_mass_adjust}")
-                    print(f"Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
                     res = requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
-                    print(f"Response Status: {res.status_code}")
-                    print(f"Response Text: {res.text}")
-                    print(f"-----------------------------------\n")
                 except Exception as e:
                     print(f"[DEBUG] Lỗi API KHO_E: {e}")
             return
@@ -421,13 +415,7 @@ class WMSUpdateRuleThread(QThread):
                 "flow_pick_order_group_id_list": group_ids
             }
             try:
-                print(f"\n--- [API POST Request - {role_name}] ---")
-                print(f"URL: {url_mass_adjust}")
-                print(f"Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
                 res = requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
-                print(f"Response Status: {res.status_code}")
-                print(f"Response Text: {res.text}")
-                print(f"-----------------------------------\n")
             except Exception as e:
                 print(f"[DEBUG] Lỗi Exception mass_adjust_staff_picking_rule: {e}")
 
@@ -448,17 +436,11 @@ class WMSUpdateRuleThread(QThread):
                     "Flow SSAQ")
         else:
             target_z_list = list(normal_zones) if normal_zones else ["SA4"]
-
-            # Gán đơn bình thường (Normal pickers sẽ mất hoặc nhận thêm 50057 theo ca)
             do_post(normal_staff, target_z_list, ["SA4"], normal_channels, ["VNVLFPOG0053"], "Normal Staff")
-
-            # Hỏa Tốc Chung
             do_post(urgent_all_staff, target_z_list, ["SA4"], ["50033", "50044", "50051"], ["VNVLFPOG0053"],
                     "Express All")
             do_post(urgent_ahm_staff, target_z_list, ["SA4"], ["50033", "50044"], ["VNVLFPOG0053"], "AHM Staff")
             do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50051"], ["VNVLFPOG0053"], "SDD Staff")
-
-            # Gán đơn NDD (Chỉ 50057)
             do_post(urgent_ndd_staff, target_z_list, ["SA4"], ["50057"], ["VNVLFPOG0053"], "NDD Staff")
 
 
@@ -543,7 +525,6 @@ class FetchTasksThread(QThread):
 
                 other_special = sum([has_ahm, has_sdd])
 
-                # Logic đặc biệt cho 50057
                 if has_ndd:
                     if not has_ahm and not has_sdd and not has_normal:
                         task_type = "ndd"
@@ -652,7 +633,6 @@ class FetchDynamicTasksThread(QThread):
 
                     other_special = sum([has_ahm, has_sdd])
 
-                    # Logic đặc biệt cho 50057
                     if has_ndd:
                         if not has_ahm and not has_sdd and not has_normal:
                             task_type = "ndd"
@@ -814,9 +794,8 @@ class FirebaseUpdateThread(QThread):
                 payload = {
                     "wms_id": self.data.get("wms_id", ""),
                     "name": self.data.get("name", ""),
-                    "sex": self.data.get("sex", ""),
                     "block": self.data.get("block", ""),
-                    "color": self.data.get("color", "black"),
+                    "color": self.data.get("color", "#1E293B"),
                     "urgent": self.data.get("urgent", "N"),
                     "kho_e_group": self.data.get("kho_e_group", ""),
                     "kho_e_label": self.data.get("kho_e_label", "")
@@ -885,16 +864,17 @@ class InitDataThread(QThread):
 
             if len(all_data) > 1:
                 for row in all_data[1:]:
-                    while len(row) < 6: row.append("")
+                    # Đảm bảo đủ ít nhất 4 cột: UserID (A), WMSID (B), Name (C), Email (D)
+                    while len(row) < 4: row.append("")
                     user_id = str(row[0]).strip()
                     wms_id = str(row[1]).strip()
                     if not user_id and not wms_id: continue
+
                     cached_data.append({
                         "UserID": user_id,
                         "WMSID": wms_id,
-                        "Email": str(row[2]).strip(),
-                        "Name": str(row[4]).strip(),
-                        "Sex": str(row[5]).strip()
+                        "Name": str(row[2]).strip(),
+                        "Email": str(row[3]).strip()
                     })
 
             self.finished_signal.emit(cached_data, wfm_cookie, wms_cookie)
@@ -942,13 +922,12 @@ class ProcessApiThread(QThread):
             else:
                 continue
 
-            emp_name, emp_sex, emp_wmsid, emp_userid, emp_email = "Không xác định", "", scanned_id, scanned_id, ""
+            emp_name, emp_wmsid, emp_userid, emp_email = "Không xác định", scanned_id, scanned_id, ""
 
             for emp in self.cached_data:
                 if (id_type == "wms" and emp["WMSID"] == scanned_id) or (
                         id_type == "user" and emp["UserID"].upper() == scanned_id):
                     emp_name = emp["Name"]
-                    emp_sex = emp["Sex"]
                     emp_wmsid = emp["WMSID"]
                     emp_userid = emp["UserID"].upper()
                     emp_email = emp.get("Email", "")
@@ -1013,14 +992,7 @@ class ProcessApiThread(QThread):
                 except Exception:
                     pass
 
-            safe_sex = remove_accents(str(emp_sex)).strip().lower()
-            color_tag = "#1E293B"
-            if safe_sex in ["nam", "m", "male"]:
-                color_tag = "#2563EB"
-            elif safe_sex in ["nu", "f", "female"]:
-                color_tag = "#DB2777"
-
-            result = {"name": emp_name, "wms_id": emp_wmsid, "user_id": emp_userid, "sex": emp_sex, "color": color_tag,
+            result = {"name": emp_name, "wms_id": emp_wmsid, "user_id": emp_userid, "color": "#1E293B",
                       "block": "", "urgent": "N"}
             self.result_ready.emit(result)
 
@@ -1182,7 +1154,7 @@ class MainWindow(QMainWindow):
         self.dynamic_task_counts = {}
         self.flow_task_counts = {}
         self.flow_ssaq_counts = {}
-        self.kho_e_task_counts = {}  # Lưu đếm task của kho E
+        self.kho_e_task_counts = {}
 
         self.badges = {}
 
@@ -1409,7 +1381,6 @@ class MainWindow(QMainWindow):
         self.toggle_ns_ndd_phu_thai = ToggleSwitch()
         self.toggle_dminus = ToggleSwitch()
 
-        # Bắt thêm tham số checked để tránh lỗi ẩn TypeError từ thư viện PyQt5
         self.toggle_sdd.clicked.connect(lambda checked, name="SDD": self.on_toggle_changed(name))
         self.toggle_ahm.clicked.connect(lambda checked, name="AHM": self.on_toggle_changed(name))
         self.toggle_ds_ndd_normal.clicked.connect(lambda checked, name="D-S NDD normal": self.on_toggle_changed(name))
@@ -1494,8 +1465,6 @@ class MainWindow(QMainWindow):
             self.btn_shift_toggle.setText("☀️ Ca Ngày")
             self.btn_shift_toggle.setStyleSheet(
                 "background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
-
-            # Logic Tự động điều chỉnh UI cho Ca Ngày
             self.toggle_ds_ndd_normal.setChecked(True)
             self.toggle_ds_ndd_phu_thai.setChecked(True)
             self.toggle_ns_ndd_normal.setChecked(False)
@@ -1504,14 +1473,11 @@ class MainWindow(QMainWindow):
             self.btn_shift_toggle.setText("🌙 Ca Đêm")
             self.btn_shift_toggle.setStyleSheet(
                 "background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
-
-            # Logic Tự động điều chỉnh UI cho Ca Đêm
             self.toggle_ds_ndd_normal.setChecked(False)
             self.toggle_ds_ndd_phu_thai.setChecked(False)
             self.toggle_ns_ndd_normal.setChecked(True)
             self.toggle_ns_ndd_phu_thai.setChecked(True)
 
-        # Cập nhật Toggle Configuration lên Firebase và WMS
         new_states = {
             "SDD": self.toggle_sdd.isChecked(),
             "AHM": self.toggle_ahm.isChecked(),
@@ -1542,7 +1508,6 @@ class MainWindow(QMainWindow):
 
         self.refresh_wms_tasks()
 
-        # Cập nhật quyền cho tất cả nhân viên ngay khi đổi ca
         block_users = {}
         for uid, data in self.current_firebase_data.items():
             block = data.get("block", "")
@@ -2216,7 +2181,6 @@ class MainWindow(QMainWindow):
             is_ns_ndd_phu_thai = _parse_bool(config_dict.get("N-S NDD Phú Thái", False))
             is_dminus = _parse_bool(config_dict.get("D-", False))
 
-            # Khôi phục trạng thái ca
             is_day_shift = _parse_bool(config_dict.get("DayShift", True))
             self.btn_shift_toggle.blockSignals(True)
             self.btn_shift_toggle.setChecked(is_day_shift)
