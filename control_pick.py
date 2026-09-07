@@ -16,9 +16,6 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QRunnable, QThreadPool, pyqtSlot, QRect
 from PyQt5.QtGui import QFont, QColor, QKeySequence, QPainter, QCursor
 
-import gspread
-from google.oauth2.service_account import Credentials
-
 # =========================================================================
 # WAVE RULE GROUPS
 # =========================================================================
@@ -331,7 +328,6 @@ class WMSUpdateRuleThread(QThread):
         is_flow = self.target_zone in FLOW_ZONES
         is_none = self.target_zone == ""
 
-        # Lấy trạng thái Ca Ngày / Ca Đêm từ config để điều chỉnh channel 50057 cho normal
         is_day_shift = self.config_data.get("DayShift", True)
         normal_channels = ["50011", "50021", "50032", "50057"] if is_day_shift else ["50011", "50021", "50032"]
 
@@ -415,7 +411,7 @@ class WMSUpdateRuleThread(QThread):
                 "flow_pick_order_group_id_list": group_ids
             }
             try:
-                res = requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
+                requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
             except Exception as e:
                 print(f"[DEBUG] Lỗi Exception mass_adjust_staff_picking_rule: {e}")
 
@@ -794,8 +790,9 @@ class FirebaseUpdateThread(QThread):
                 payload = {
                     "wms_id": self.data.get("wms_id", ""),
                     "name": self.data.get("name", ""),
-                    "block": self.data.get("block", ""),
+                    "sex": self.data.get("sex", ""),
                     "color": self.data.get("color", "#1E293B"),
+                    "block": self.data.get("block", ""),
                     "urgent": self.data.get("urgent", "N"),
                     "kho_e_group": self.data.get("kho_e_group", ""),
                     "kho_e_label": self.data.get("kho_e_label", "")
@@ -815,15 +812,13 @@ class FirebaseUpdateThread(QThread):
             self.finished_signal.emit()
 
 
-class InitDataThread(QThread):
-    finished_signal = pyqtSignal(object, str, str)
+class FetchCookiesThread(QThread):
+    finished_signal = pyqtSignal(str, str)
     error_signal = pyqtSignal(str)
 
     def run(self):
-        cached_data = []
         wfm_cookie = ""
         wms_cookie = ""
-
         try:
             url = "https://cookies-942c0-default-rtdb.firebaseio.com/cookies.json"
             response = requests.get(url, timeout=10)
@@ -849,35 +844,8 @@ class InitDataThread(QThread):
                         wms_cookie = "; ".join(v_data["cookie"]) if isinstance(v_data["cookie"], list) else v_data[
                             "cookie"]
             if not wfm_cookie: wfm_cookie = str(data)
-            wfm_cookie = wfm_cookie.strip()
-            wms_cookie = wms_cookie.strip()
-        except Exception as e:
-            print(f"[DEBUG] Lỗi tải cookies: {e}")
 
-        try:
-            scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-            creds = Credentials.from_service_account_file("JSON4.json", scopes=scopes)
-            client = gspread.authorize(creds)
-            SHEET_ID = '1WZVgl1L86F75YVRqP4N8n2E3-K6AJCup6hKnVu3-0rE'
-            worksheet = client.open_by_key(SHEET_ID).worksheet('Infomation_laborer/employee')
-            all_data = worksheet.get_all_values()
-
-            if len(all_data) > 1:
-                for row in all_data[1:]:
-                    # Đảm bảo đủ ít nhất 4 cột: UserID (A), WMSID (B), Name (C), Email (D)
-                    while len(row) < 4: row.append("")
-                    user_id = str(row[0]).strip()
-                    wms_id = str(row[1]).strip()
-                    if not user_id and not wms_id: continue
-
-                    cached_data.append({
-                        "UserID": user_id,
-                        "WMSID": wms_id,
-                        "Name": str(row[2]).strip(),
-                        "Email": str(row[3]).strip()
-                    })
-
-            self.finished_signal.emit(cached_data, wfm_cookie, wms_cookie)
+            self.finished_signal.emit(wfm_cookie.strip(), wms_cookie.strip())
         except Exception as e:
             self.error_signal.emit(str(e))
 
@@ -885,10 +853,9 @@ class InitDataThread(QThread):
 class ProcessApiThread(QThread):
     result_ready = pyqtSignal(object)
 
-    def __init__(self, raw_text, cached_data, wfm_cookie, wms_cookie):
+    def __init__(self, raw_text, wfm_cookie, wms_cookie):
         super().__init__()
         self.raw_text = raw_text
-        self.cached_data = cached_data
         self.wfm_cookie = wfm_cookie
         self.wms_cookie = wms_cookie
 
@@ -896,7 +863,7 @@ class ProcessApiThread(QThread):
         id_list = [x.strip() for x in re.split(r'[\s,]+', self.raw_text) if x.strip()]
         if not id_list: return
 
-        headers_common = {
+        headers_wfm = {
             "Sec-CH-UA": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
             "Sec-CH-UA-Mobile": "?0",
             "Sec-CH-UA-Platform": '"Windows"',
@@ -904,96 +871,126 @@ class ProcessApiThread(QThread):
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Cookie": self.wfm_cookie
         }
 
-        headers_wfm = headers_common.copy()
-        headers_wfm["Cookie"] = self.wfm_cookie
-        headers_wms = headers_common.copy()
+        headers_wms = headers_wfm.copy()
         headers_wms["Cookie"] = self.wms_cookie
 
         for scanned_id in id_list:
-            id_type = ""
+            emp_userid = None
+            emp_wmsid = ""
+
             if re.match(r'^\d{6}$', scanned_id):
-                id_type = "wms"
+                emp_wmsid = scanned_id
+                url_search = "https://wfm.ssc.shopee.com/api/apps/labor/staff/search_staff_v2"
+                payload_search = {"wms_user_id_list_str": scanned_id, "pageno": 1, "count": 20}
+                try:
+                    res_search = requests.post(url_search, json=payload_search, headers=headers_wfm, timeout=10).json()
+                    if res_search.get("retcode") == 0 and res_search.get("data") and res_search["data"].get("list"):
+                        emp_userid = res_search["data"]["list"][0].get("staff_no")
+                except Exception as e:
+                    print(f"Error fetching UserID from WMS ID: {e}")
             elif re.match(r'^[Ss]\d{6}$', scanned_id):
-                id_type = "user"
-                scanned_id = scanned_id.upper()
+                emp_userid = scanned_id.upper()
             else:
                 continue
 
-            emp_name, emp_wmsid, emp_userid, emp_email = "Không xác định", scanned_id, scanned_id, ""
+            if not emp_userid:
+                continue
 
-            for emp in self.cached_data:
-                if (id_type == "wms" and emp["WMSID"] == scanned_id) or (
-                        id_type == "user" and emp["UserID"].upper() == scanned_id):
-                    emp_name = emp["Name"]
-                    emp_wmsid = emp["WMSID"]
-                    emp_userid = emp["UserID"].upper()
-                    emp_email = emp.get("Email", "")
-                    break
+            emp_name = "Không xác định"
+            emp_sex = ""
+            emp_email = ""
+            contract_type = 0
+            color_tag = "#1E293B"
+            reporting_warehouse = "VNVL"
 
-            wfm_success = wms_success = False
+            try:
+                url_detail = f"https://wfm.ssc.shopee.com/api/apps/labor/staff/get_staff_detail?staff_no={emp_userid}"
+                res_detail = requests.get(url_detail, headers=headers_wfm, timeout=10).json()
 
-            if self.wfm_cookie:
-                try:
-                    url_search = "https://wfm.ssc.shopee.com/api/apps/labor/staff/search_staff_v2"
-                    payload_search = {"order_by_ctime": 2, "pageno": 1, "count": 20}
-                    if id_type == "wms":
-                        payload_search["wms_user_id_list_str"] = scanned_id
+                if res_detail.get("retcode") == 0 and res_detail.get("data") and res_detail["data"].get("item"):
+                    item = res_detail["data"]["item"]
+                    raw_name = item.get("staff_name", "Không xác định")
+                    emp_email = item.get("staff_email", "")
+                    wms_uid = item.get("wms_user_id")
+                    if wms_uid:
+                        emp_wmsid = str(wms_uid)
+
+                    contract_type = item.get("contract_type", 0)
+                    gender_code = item.get("gender", 0)
+                    reporting_warehouse = item.get("reporting_warehouse", "VNVL")
+
+                    if gender_code == 1:
+                        emp_sex = "Nam"
+                    elif gender_code == 2:
+                        emp_sex = "Nữ"
                     else:
-                        payload_search["staff_no_list_str"] = scanned_id
+                        emp_sex = "Unknown"
 
-                    res_search = requests.post(url_search, json=payload_search, headers=headers_wfm).json()
-                    if res_search.get("retcode") == 0 and res_search.get("data") and res_search["data"].get("list"):
-                        staff_info = res_search["data"]["list"][0]
-                        if emp_name == "Không xác định":
-                            raw_name = staff_info.get("staff_name", "Không xác định")
-                            if raw_name and raw_name.startswith("********"):
-                                match = re.search(r'\*\*\*\*\*\*\*\*(?:&|\\u0026).*?(?:&|\\u0026)(.*)', raw_name)
-                                if match:
-                                    encrypt_data = match.group(1)
-                                    pii_url = "https://wfm.ssc.shopee.com/api/apps/pii/get_pii_data"
-                                    try:
-                                        pii_res = requests.post(pii_url, json={"encrypt_data": encrypt_data},
-                                                                headers=headers_wfm).json()
-                                        if pii_res.get("retcode") == 0 and pii_res.get("data"):
-                                            emp_name = pii_res["data"].get("decrypt_data", raw_name)
-                                        else:
-                                            emp_name = raw_name
-                                    except Exception:
-                                        emp_name = raw_name
+                    if contract_type in [8, 9, 11]:
+                        color_tag = "#1E293B"
+                    else:
+                        if gender_code == 1:
+                            color_tag = "#2563EB"
+                        elif gender_code == 2:
+                            color_tag = "#DB2777"
+                        else:
+                            color_tag = "#1E293B"
+
+                    if raw_name and raw_name.startswith("********"):
+                        match = re.search(r'\*\*\*\*\*\*\*\*(?:&|\\u0026).*?(?:&|\\u0026)(.*)', raw_name)
+                        if match:
+                            encrypt_data = match.group(1)
+                            pii_url = "https://wfm.ssc.shopee.com/api/apps/pii/get_pii_data"
+                            try:
+                                pii_res = requests.post(pii_url, json={"encrypt_data": encrypt_data},
+                                                        headers=headers_wfm, timeout=10).json()
+                                if pii_res.get("retcode") == 0 and pii_res.get("data"):
+                                    emp_name = pii_res["data"].get("decrypt_data", raw_name)
                                 else:
                                     emp_name = raw_name
-                            else:
+                            except Exception:
                                 emp_name = raw_name
+                        else:
+                            emp_name = raw_name
+                    else:
+                        emp_name = raw_name
 
-                        if "wms_user_id" in staff_info: emp_wmsid = str(staff_info["wms_user_id"])
-                        if "staff_no" in staff_info and emp_userid == scanned_id: emp_userid = staff_info[
-                            "staff_no"].upper()
-                        if not emp_email and "staff_email" in staff_info: emp_email = staff_info.get("staff_email", "")
-                except Exception:
-                    pass
+                    if reporting_warehouse != "VNVL":
+                        emp_name = f"⚠️ [KHO: {reporting_warehouse}] {emp_name}"
+
+            except Exception as e:
+                print(f"Error fetching Staff Detail: {e}")
 
             if self.wms_cookie and emp_wmsid.isdigit():
                 try:
                     url_rule = f"https://wms.ssc.shopee.vn/api/v2/apps/process/outbound/pickingrule/get_picking_rule_detail?rule_id=Pick0024&user_id={emp_wmsid}"
-                    res_rule = requests.get(url_rule, headers=headers_wms).json()
+                    res_rule = requests.get(url_rule, headers=headers_wms, timeout=10).json()
                     if res_rule.get("retcode") == 0 and res_rule.get("data"):
                         payload_wms = dict(res_rule["data"])
                         for k in ["id", "whs_id", "min_item_qty_per_mix_task", "simplified_checking",
-                                  "hide_close_device"]: payload_wms.pop(k, None)
+                                  "hide_close_device"]:
+                            payload_wms.pop(k, None)
                         payload_wms.update({"user_id": int(emp_wmsid), "rule_id": "Pick0024", "user_email": emp_email,
                                             "email": emp_email, "working_zone_list": []})
-                        res_create = requests.post(
+                        requests.post(
                             "https://wms.ssc.shopee.vn/api/v2/apps/process/outbound/pickerskill/create_picker_skill",
-                            json=payload_wms, headers=headers_wms).json()
-                        if res_create.get("retcode") == 0: wms_success = True
-                except Exception:
-                    pass
+                            json=payload_wms, headers=headers_wms, timeout=10)
+                except Exception as e:
+                    print(f"Error auto-assigning WMS Pick0024 skill: {e}")
 
-            result = {"name": emp_name, "wms_id": emp_wmsid, "user_id": emp_userid, "color": "#1E293B",
-                      "block": "", "urgent": "N"}
+            result = {
+                "name": emp_name,
+                "wms_id": emp_wmsid,
+                "user_id": emp_userid,
+                "sex": emp_sex,
+                "color": color_tag,
+                "block": "",
+                "urgent": "N"
+            }
             self.result_ready.emit(result)
 
 
@@ -1127,6 +1124,7 @@ class ZoneListWidget(QListWidget):
                             prefix = "⚧️ "
 
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
+                    taken_item.setForeground(QColor(data.get("color", "#1E293B")))
                     taken_item.setData(Qt.UserRole, data)
 
                     self.insertItem(row, taken_item)
@@ -1146,7 +1144,6 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(get_dynamic_qss(self.scale))
 
         self.active_threads = []
-        self.cached_data = []
         self.wfm_cookie = self.wms_cookie = ""
         self.current_firebase_data = {}
 
@@ -1256,7 +1253,7 @@ class MainWindow(QMainWindow):
         input_vbox.addWidget(self.txt_scan)
 
         status_layout = QHBoxLayout()
-        self.lbl_status = QLabel("Đang khởi động hệ thống...")
+        self.lbl_status = QLabel("Đang tải tài nguyên hệ thống...")
         self.lbl_status.setStyleSheet(
             f"font-weight: 500; color: #64748B; border: none; font-size: {max(10, int(12 * self.scale))}px;")
         self.progress_bar = QProgressBar()
@@ -1571,8 +1568,7 @@ class MainWindow(QMainWindow):
                     item.setText(base_text)
                     item.setBackground(QColor("#F5F5F5"))
                     saved_color = data.get("color", "#1E293B")
-                    item.setForeground(
-                        QColor("#1E293B" if saved_color in ["white", "#ffffff", "#2d3436", "black"] else saved_color))
+                    item.setForeground(QColor(saved_color))
                     font = item.font()
                     font.setBold(False)
                     item.setFont(font)
@@ -1819,18 +1815,18 @@ class MainWindow(QMainWindow):
             self.btn_tab_flow.setText(f"🌊 FLOW PICK (👤 Tổng: {total_flow})")
 
     def start_initialization(self):
-        init_thread = InitDataThread()
-        init_thread.finished_signal.connect(self.on_init_finished)
-        init_thread.error_signal.connect(self.on_init_error)
-        self.start_thread(init_thread)
+        cookie_thread = FetchCookiesThread()
+        cookie_thread.finished_signal.connect(self.on_cookies_fetched)
+        cookie_thread.error_signal.connect(self.on_init_error)
+        self.start_thread(cookie_thread)
 
-    @pyqtSlot(object, str, str)
-    def on_init_finished(self, cached_data, wfm_cookie, wms_cookie):
-        self.cached_data, wfm_cookie, wms_cookie = cached_data, wfm_cookie, wms_cookie
-        self.wfm_cookie, self.wms_cookie = wfm_cookie, wms_cookie
+    @pyqtSlot(str, str)
+    def on_cookies_fetched(self, wfm_cookie, wms_cookie):
+        self.wfm_cookie = wfm_cookie
+        self.wms_cookie = wms_cookie
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
-        self.lbl_status.setText(f"✅ Sẵn sàng! Đã tải {len(self.cached_data)} nhân sự.")
+        self.lbl_status.setText("✅ Khởi động thành công!")
         self.lbl_status.setStyleSheet("color: #10B981;")
         self.refresh_all_data()
 
@@ -1842,9 +1838,9 @@ class MainWindow(QMainWindow):
     def on_scan_triggered(self, text):
         self.txt_scan.clear()
         if not text.strip(): return
-        self.lbl_status.setText("Đang xử lý dữ liệu nhập vào...")
+        self.lbl_status.setText("Đang gọi API lấy thông tin nhân sự...")
         self.lbl_status.setStyleSheet("color: #3B82F6;")
-        api_thread = ProcessApiThread(text, self.cached_data, self.wfm_cookie, self.wms_cookie)
+        api_thread = ProcessApiThread(text, self.wfm_cookie, self.wms_cookie)
         api_thread.result_ready.connect(self.add_item_to_ui_and_firebase)
         self.start_thread(api_thread)
 
@@ -1893,6 +1889,7 @@ class MainWindow(QMainWindow):
                 prefix = "⚧️ "
 
         item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
+        item.setForeground(QColor(data.get("color", "#1E293B")))
         item.setData(Qt.UserRole, data)
         item.setFlags(item.flags() | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled | Qt.ItemIsEnabled)
 
@@ -2265,6 +2262,7 @@ class MainWindow(QMainWindow):
                     prefix = "⚧️ "
 
             item.setText(f'{prefix}{v.get("name", "N/A")} - {v.get("wms_id", "")}')
+            item.setForeground(QColor(v.get("color", "#1E293B")))
             item.setFlags(item.flags() | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled | Qt.ItemIsEnabled)
             item.setData(Qt.UserRole, v)
 
