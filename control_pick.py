@@ -16,6 +16,9 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QRunnable, QThreadPool, pyqtSlot, QRect
 from PyQt5.QtGui import QFont, QColor, QKeySequence, QPainter, QCursor
 
+# =========================================================================
+# WAVE RULE GROUPS
+# =========================================================================
 WAVE_RULE_GROUPS = {
     "SDD": ["VNVLDWR0200", "VNVLDWR0213", "VNVLDWR0214"],
     "AHM": ["VNVLDWR0215", "VNVLDWR0216", "VNVLDWR0217"],
@@ -26,115 +29,13 @@ WAVE_RULE_GROUPS = {
     "D-": ["VNVLDWR0196", "VNVLDWR0195"]
 }
 
-# Cấu hình các Block Pick Normal
+# --- CONSTANTS ---
+FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "B5", "HV", "FD", "C1", "C2", "C3", "KHO_E", "TOP"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block E", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
-
-# Danh sách các ô hiển thị ở Flow Pick sau khi loại bỏ B5 và gộp ô
-FLOW_ZONES = [
-    "A1,A2",
-    "A3,A4",
-    "B1,B3,HV,FD",
-    "B2",
-    "B4",
-    "C1,C2,C3",
-    "TOP",
-    "KHO_E"
-]
-
-# Bản đồ ánh xạ sub-zone từ WMS API về ô gộp hiển thị
-SUBZONE_MAP = {
-    "A1": "A1,A2",
-    "A2": "A1,A2",
-    "A3": "A3,A4",
-    "A4": "A3,A4",
-    "B1": "B1,B3,HV,FD",
-    "B3": "B1,B3,HV,FD",
-    "HV": "B1,B3,HV,FD",
-    "FD": "B1,B3,HV,FD",
-    "B2": "B2",
-    "B4": "B4",
-    "C1": "C1,C2,C3",
-    "C2": "C1,C2,C3",
-    "C3": "C1,C2,C3",
-    "TOP": "TOP"
-}
-
-# 14 loại nhóm đơn giám sát cho Flow Pick (thêm InTra BD và InTra SW)
-FLOW_TASK_GROUPS = {
-    "normal": "VNVLFPOG0134",
-    "ssaq": "VNVLFPOG0189",
-    "sdd_1": "VNVLFPOG0236",
-    "sdd_2": "VNVLFPOG0237",
-    "sdd_3": "VNVLFPOG0238",
-    "sdd_4": "VNVLFPOG0239",
-    "sdd_5": "VNVLFPOG0240",
-    "sdd_6": "VNVLFPOG0241",
-    "ahm_1": "VNVLFPOG0242",
-    "ahm_2": "VNVLFPOG0243",
-    "ahm_3": "VNVLFPOG0244",
-    "ahm_4": "VNVLFPOG0245",
-    "intra_bd": "VNVLFPOG0246",
-    "intra_sw": "VNVLFPOG0247"
-}
-
-# Cấu hình danh sách group_id lũy kế cho từng COT SDD Flow Pick (Channel: 50051)
-FLOW_SDD_CUMULATIVE_GROUPS = {
-    "S1": ["VNVLFPOG0236"],
-    "S2": ["VNVLFPOG0236", "VNVLFPOG0237"],
-    "S3": ["VNVLFPOG0236", "VNVLFPOG0237", "VNVLFPOG0238"],
-    "S4": ["VNVLFPOG0236", "VNVLFPOG0237", "VNVLFPOG0238", "VNVLFPOG0239"],
-    "S5": ["VNVLFPOG0236", "VNVLFPOG0237", "VNVLFPOG0238", "VNVLFPOG0239", "VNVLFPOG0240"],
-    "S6": ["VNVLFPOG0236", "VNVLFPOG0237", "VNVLFPOG0238", "VNVLFPOG0239", "VNVLFPOG0240", "VNVLFPOG0241"]
-}
-
-# Cấu hình danh sách group_id lũy kế cho từng COT AHM Flow Pick (Channels: 50033, 50044)
-FLOW_AHM_CUMULATIVE_GROUPS = {
-    "A1": ["VNVLFPOG0242"],
-    "A2": ["VNVLFPOG0242", "VNVLFPOG0243"],
-    "A3": ["VNVLFPOG0242", "VNVLFPOG0243", "VNVLFPOG0244"],
-    "A4": ["VNVLFPOG0242", "VNVLFPOG0243", "VNVLFPOG0244", "VNVLFPOG0245"]
-}
-
-NORMAL_SDD_BASE_GROUPS = {
-    "S1": [1774,1775,1776,1777,1778,1779,1780,1782,1781,1783,1784,1785,1786,1787,1788,1789,1790,1791,1792,1793,1794,1795],
-    "S2": [1796,1797,1798,1799,1800,1801,1802,1803,1804,1805,1806,1807,1808,1809,1810,1811,1812,1813,1814,1815,1816,1817],
-    "S3": [1818,1819,1820,1821,1822,1823,1824,1825,1826,1827,1828,1829,1830,1831,1832,1833,1834,1835,1836,1837,1838,1839],
-    "S4": [1840,1841,1842,1843,1844,1845,1846,1847,1848,1849,1850,1851,1852,1853,1854,1855,1856,1857,1858,1859,1860,1861],
-    "S5": [1862,1863,1864,1865,1866,1867,1868,1869,1870,1871,1872,1873,1874,1875,1876,1877,1878,1879,1880,1881,1882,1883],
-    "S6": [1884,1885,1886,1887,1888,1889,1890,1891,1892,1893,1894,1895,1896,1897,1898,1899,1900,1901,1902,1903,1904,1905],
-}
-
-NORMAL_AHM_BASE_GROUPS = {
-    "A1": [1906,1907,1908,1909,1910,1911,1912,1913,1914,1915,1916,1917,1918,1919,1920,1921,1922,1923,1924,1925,1926,1927],
-    "A2": [1928,1929,1930,1931,1932,1933,1934,1935,1936,1937,1938,1939,1940,1941,1942,1943,1944,1945,1946,1947,1948,1949],
-    "A3": [1950,1951,1952,1953,1954,1955,1956,1957,1958,1959,1960,1961,1962,1963,1964,1965,1966,1967,1968,1969,1970,1971],
-    "A4": [1972,1973,1974,1975,1976,1977,1978,1979,1980,1981,1982,1983,1984,1985,1986,1987,1988,1989,1990,1991,1992,1993],
-}
-
-NORMAL_INTRA_GROUPS = {
-    "IBD": [1994,1995,1996,1997,1998,1999,2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015],
-    "ISW": [2082,2083,2084,2085,2086,2087,2088,2089,2090,2091,2092,2093,2094,2095,2096,2097,2098,2099,2100,2101,2102,2103],
-}
-
-# Cấu hình danh sách group_id lũy kế cho Pick Normal
-NORMAL_SDD_CUMULATIVE_GROUPS = {
-    "S1": NORMAL_SDD_BASE_GROUPS["S1"],
-    "S2": NORMAL_SDD_BASE_GROUPS["S1"] + NORMAL_SDD_BASE_GROUPS["S2"],
-    "S3": NORMAL_SDD_BASE_GROUPS["S1"] + NORMAL_SDD_BASE_GROUPS["S2"] + NORMAL_SDD_BASE_GROUPS["S3"],
-    "S4": NORMAL_SDD_BASE_GROUPS["S1"] + NORMAL_SDD_BASE_GROUPS["S2"] + NORMAL_SDD_BASE_GROUPS["S3"] + NORMAL_SDD_BASE_GROUPS["S4"],
-    "S5": NORMAL_SDD_BASE_GROUPS["S1"] + NORMAL_SDD_BASE_GROUPS["S2"] + NORMAL_SDD_BASE_GROUPS["S3"] + NORMAL_SDD_BASE_GROUPS["S4"] + NORMAL_SDD_BASE_GROUPS["S5"],
-    "S6": NORMAL_SDD_BASE_GROUPS["S1"] + NORMAL_SDD_BASE_GROUPS["S2"] + NORMAL_SDD_BASE_GROUPS["S3"] + NORMAL_SDD_BASE_GROUPS["S4"] + NORMAL_SDD_BASE_GROUPS["S5"] + NORMAL_SDD_BASE_GROUPS["S6"],
-}
-
-NORMAL_AHM_CUMULATIVE_GROUPS = {
-    "A1": NORMAL_AHM_BASE_GROUPS["A1"],
-    "A2": NORMAL_AHM_BASE_GROUPS["A1"] + NORMAL_AHM_BASE_GROUPS["A2"],
-    "A3": NORMAL_AHM_BASE_GROUPS["A1"] + NORMAL_AHM_BASE_GROUPS["A2"] + NORMAL_AHM_BASE_GROUPS["A3"],
-    "A4": NORMAL_AHM_BASE_GROUPS["A1"] + NORMAL_AHM_BASE_GROUPS["A2"] + NORMAL_AHM_BASE_GROUPS["A3"] + NORMAL_AHM_BASE_GROUPS["A4"],
-}
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
 FIREBASE_CONFIG_URL = "https://ship-8a347-default-rtdb.firebaseio.com/config"
+
 
 def remove_accents(input_str):
     s = str(input_str)
@@ -149,52 +50,6 @@ def get_scale_factor():
     scale_h = screen.height() / 1080.0
     return min(scale_w, scale_h, 1.0)
 
-
-def get_picker_prefix(data):
-    block = data.get("block", "")
-    urg = data.get("urgent", "N")
-    if block == "KHO_E":
-        return f"[{data.get('kho_e_label', 'PT-N')}] "
-    elif block == "":
-        return ""
-    elif block in FLOW_ZONES:
-        if urg == "Q":
-            return "⚧️ "
-        elif urg in FLOW_SDD_CUMULATIVE_GROUPS:
-            return f"🪼[C{urg[1]}] "
-        elif urg in FLOW_AHM_CUMULATIVE_GROUPS:
-            return f"🅰️[C{urg[1]}] "
-        elif urg == "IBD":
-            return "🚚[BD] "
-        elif urg == "ISW":
-            return "🚚[SW] "
-        else:
-            return "📦 "
-    else:
-        if urg in NORMAL_SDD_CUMULATIVE_GROUPS:
-            return f"🪼[C{urg[1]}] "
-        elif urg in NORMAL_AHM_CUMULATIVE_GROUPS:
-            return f"🅰️[C{urg[1]}] "
-        elif urg == "IBD":
-            return "🚚[BD] "
-        elif urg == "ISW":
-            return "🚚[SW] "
-        elif urg == "Y":
-            return "🔥 "
-        elif urg == "A":
-            return "🅰️ "
-        elif urg == "S":
-            return "🪼 "
-        elif urg == "V":
-            return "🚀 "
-        elif urg == "Q":
-            return "⚧️ "
-        return ""
-
-
-def format_picker_item_text(data):
-    prefix = get_picker_prefix(data)
-    return f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}'
 
 def get_dynamic_qss(scale):
     f_list = max(10, int(12 * scale))
@@ -317,6 +172,7 @@ def get_dynamic_qss(scale):
     }}
     """
 
+
 def log_uncaught_exceptions(ex_cls, ex, tb):
     text = '{}: {}:\n'.format(ex_cls.__name__, ex)
     text += ''.join(traceback.format_tb(tb))
@@ -326,6 +182,7 @@ def log_uncaught_exceptions(ex_cls, ex, tb):
 
 
 sys.excepthook = log_uncaught_exceptions
+
 
 class ToggleSwitch(QPushButton):
     def __init__(self, parent=None):
@@ -354,6 +211,7 @@ class ToggleSwitch(QPushButton):
         else:
             painter.drawEllipse(2, 2, 20, 20)
         painter.end()
+
 
 class WMSUpdateWaveRuleThread(QThread):
     finished_update = pyqtSignal(int, int)
@@ -407,6 +265,7 @@ class WMSUpdateWaveRuleThread(QThread):
 
         self.finished_update.emit(success_count, total_count)
 
+
 class WMSUpdateRuleThread(QThread):
     def __init__(self, target_zone, picker_list, config_data, wms_cookie):
         super().__init__()
@@ -452,11 +311,11 @@ class WMSUpdateRuleThread(QThread):
                 print(f"[DEBUG][Skill Update] Lỗi API Request: {e}")
 
         skills_to_set = []
-        is_flow_zone = self.target_zone in FLOW_ZONES
         for p in self.picker_list:
             wms_id = p.get("wms_id")
             if not wms_id or not str(wms_id).isdigit():
                 continue
+            is_flow_zone = self.target_zone in FLOW_ZONES
             target_rule = "Pick0025" if (is_flow_zone and p.get("urgent") == "Q") else "Pick0024"
             skills_to_set.append((wms_id, target_rule))
 
@@ -481,8 +340,7 @@ class WMSUpdateRuleThread(QThread):
                 groups[grp].append(p["user_id"])
 
             for grp, staff_ids in groups.items():
-                if not staff_ids:
-                    continue
+                if not staff_ids: continue
                 payload = {
                     "checkbox_bit_set": 61,
                     "zone_id_list": ["SA4"],
@@ -503,7 +361,7 @@ class WMSUpdateRuleThread(QThread):
                     "dynamic_wave_order_group_id_list": [-1]
                 }
                 try:
-                    requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
+                    res = requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
                 except Exception as e:
                     print(f"[DEBUG] Lỗi API KHO_E: {e}")
             return
@@ -532,11 +390,10 @@ class WMSUpdateRuleThread(QThread):
             elif self.target_zone == "Block A&B&C":
                 normal_zones.update(cfg_a + cfg_b + cfg_c)
 
-        def do_post(staff_ids, zone_ids, flow_work_zones, channel_ids, group_ids, role_name="", dynamic_wave_groups=None):
-            if not staff_ids:
-                return
+        def do_post(staff_ids, zone_ids, flow_work_zones, channel_ids, group_ids, role_name=""):
+            if not staff_ids: return
             payload = {
-                "checkbox_bit_set": 61,
+                "checkbox_bit_set": 29,
                 "zone_hard_restrict": 1,
                 "zone_hard_restrict_apply_urgent": 1,
                 "channel_hard_restrict": 1,
@@ -551,89 +408,37 @@ class WMSUpdateRuleThread(QThread):
                 "zone_id_list": zone_ids,
                 "flow_pick_working_zone_list": flow_work_zones,
                 "channel_id_list": channel_ids,
-                "flow_pick_order_group_id_list": group_ids,
-                "dynamic_wave_order_group_id_list": dynamic_wave_groups if dynamic_wave_groups is not None else [-1]
+                "flow_pick_order_group_id_list": group_ids
             }
             try:
                 requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
             except Exception as e:
-                print(f"[DEBUG] Lỗi Exception mass_adjust ({role_name}): {e}")
+                print(f"[DEBUG] Lỗi Exception mass_adjust_staff_picking_rule: {e}")
+
+        urgent_all_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "Y"]
+        urgent_ahm_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "A"]
+        urgent_sdd_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "S"]
+        urgent_ndd_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "V"]
+        normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") in ["N", "", None]]
 
         if is_none:
-            all_staff = [p["user_id"] for p in self.picker_list]
+            all_staff = urgent_all_staff + urgent_ahm_staff + urgent_sdd_staff + urgent_ndd_staff + normal_staff
             do_post(all_staff, ["SA4"], ["SA4"], normal_channels, ["VNVLFPOG0053"], "Unassigned Staff")
         elif is_flow:
-            flow_work_zones = [z.strip() for z in self.target_zone.split(",") if z.strip()]
-
-            flow_normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") in ["N", "", None]]
             flow_ssaq_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "Q"]
-
-            if flow_normal_staff:
-                do_post(flow_normal_staff, ["SA4"], flow_work_zones, normal_channels, ["VNVLFPOG0134"], "Flow Normal")
-            if flow_ssaq_staff:
-                do_post(flow_ssaq_staff, ["SA4"], flow_work_zones, ["50011", "50021", "50032"], ["VNVLFPOG0189"], "Flow SSAQ")
-
-            # Xử lý gán các COT SDD lũy kế (Channel 50051)
-            for cot_code, grp_list in FLOW_SDD_CUMULATIVE_GROUPS.items():
-                sdd_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == cot_code]
-                if sdd_staff:
-                    do_post(sdd_staff, ["SA4"], flow_work_zones, ["50051"], grp_list, f"Flow SDD {cot_code}")
-
-            # Xử lý gán các COT AHM lũy kế (Channels 50033, 50044)
-            for cot_code, grp_list in FLOW_AHM_CUMULATIVE_GROUPS.items():
-                ahm_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == cot_code]
-                if ahm_staff:
-                    do_post(ahm_staff, ["SA4"], flow_work_zones, ["50033", "50044"], grp_list, f"Flow AHM {cot_code}")
-
-            # Xử lý InTra BD (VNVLFPOG0246) & InTra SW (VNVLFPOG0247) độc lập
-            flow_ibd_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "IBD"]
-            if flow_ibd_staff:
-                do_post(flow_ibd_staff, ["SA4"], flow_work_zones, ["50033", "50044", "50011", "50021"], ["VNVLFPOG0246"], "Flow InTra BD")
-
-            flow_isw_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "ISW"]
-            if flow_isw_staff:
-                do_post(flow_isw_staff, ["SA4"], flow_work_zones, ["50033", "50044", "50011", "50021"], ["VNVLFPOG0247"], "Flow InTra SW")
+            flow_normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") != "Q"]
+            do_post(flow_normal_staff, ["SA4"], [self.target_zone], normal_channels, ["VNVLFPOG0134"], "Flow Normal")
+            do_post(flow_ssaq_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0189"],
+                    "Flow SSAQ")
         else:
-            # Pick Normal
             target_z_list = list(normal_zones) if normal_zones else ["SA4"]
+            do_post(normal_staff, target_z_list, ["SA4"], normal_channels, ["VNVLFPOG0053"], "Normal Staff")
+            do_post(urgent_all_staff, target_z_list, ["SA4"], ["50033", "50044", "50051"], ["VNVLFPOG0053"],
+                    "Express All")
+            do_post(urgent_ahm_staff, target_z_list, ["SA4"], ["50033", "50044"], ["VNVLFPOG0053"], "AHM Staff")
+            do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50051"], ["VNVLFPOG0053"], "SDD Staff")
+            do_post(urgent_ndd_staff, target_z_list, ["SA4"], ["50057"], ["VNVLFPOG0053"], "NDD Staff")
 
-            normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") in ["N", "", None]]
-            urgent_all_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "Y"]
-            urgent_ahm_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "A"]
-            urgent_sdd_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "S"]
-            urgent_ndd_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "V"]
-
-            if normal_staff:
-                do_post(normal_staff, target_z_list, ["SA4"], normal_channels, ["VNVLFPOG0053"], "Normal Staff", dynamic_wave_groups=[-1])
-            if urgent_all_staff:
-                do_post(urgent_all_staff, target_z_list, ["SA4"], ["50033", "50044", "50051"], ["VNVLFPOG0053"], "Express All", dynamic_wave_groups=[-1])
-            if urgent_ahm_staff:
-                do_post(urgent_ahm_staff, target_z_list, ["SA4"], ["50033", "50044"], ["VNVLFPOG0053"], "AHM Staff", dynamic_wave_groups=[-1])
-            if urgent_sdd_staff:
-                do_post(urgent_sdd_staff, target_z_list, ["SA4"], ["50051"], ["VNVLFPOG0053"], "SDD Staff", dynamic_wave_groups=[-1])
-            if urgent_ndd_staff:
-                do_post(urgent_ndd_staff, target_z_list, ["SA4"], ["50057"], ["VNVLFPOG0053"], "NDD Staff", dynamic_wave_groups=[-1])
-
-            # Gán COT SDD Normal lũy kế
-            for cot_code, grp_list in NORMAL_SDD_CUMULATIVE_GROUPS.items():
-                cot_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == cot_code]
-                if cot_staff:
-                    do_post(cot_staff, target_z_list, ["SA4"], ["50051"], ["VNVLFPOG0053"], f"Normal SDD {cot_code}", dynamic_wave_groups=grp_list)
-
-            # Gán COT AHM Normal lũy kế
-            for cot_code, grp_list in NORMAL_AHM_CUMULATIVE_GROUPS.items():
-                cot_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == cot_code]
-                if cot_staff:
-                    do_post(cot_staff, target_z_list, ["SA4"], ["50033", "50044"], ["VNVLFPOG0053"], f"Normal AHM {cot_code}", dynamic_wave_groups=grp_list)
-
-            # Gán InTra BD & InTra SW Normal (độc lập)
-            norm_ibd_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "IBD"]
-            if norm_ibd_staff:
-                do_post(norm_ibd_staff, target_z_list, ["SA4"], ["50033", "50044", "50011", "50021"], ["VNVLFPOG0053"], "Normal InTra BD", dynamic_wave_groups=NORMAL_INTRA_GROUPS["IBD"])
-
-            norm_isw_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") == "ISW"]
-            if norm_isw_staff:
-                do_post(norm_isw_staff, target_z_list, ["SA4"], ["50033", "50044", "50011", "50021"], ["VNVLFPOG0053"], "Normal InTra SW", dynamic_wave_groups=NORMAL_INTRA_GROUPS["ISW"])
 
 class FetchTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
@@ -694,8 +499,7 @@ class FetchTasksThread(QThread):
                 }
 
                 res = requests.post(url, json=payload, headers=headers, timeout=10)
-                if res.status_code != 200:
-                    break
+                if res.status_code != 200: break
 
                 data = res.json().get("data", {})
                 batch_list = data.get("list", [])
@@ -764,6 +568,7 @@ class FetchTasksThread(QThread):
             print(f"[DEBUG][WMS Tasks] Exception: {e}")
             self.tasks_fetched.emit({})
 
+
 class FetchDynamicTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
 
@@ -777,20 +582,14 @@ class FetchDynamicTasksThread(QThread):
             self.tasks_fetched.emit({})
             return
 
-        counts = {
-            block: {
-                "auto": set(),
-                "sdd_1": 0, "sdd_2": 0, "sdd_3": 0, "sdd_4": 0, "sdd_5": 0, "sdd_6": 0,
-                "ahm_1": 0, "ahm_2": 0, "ahm_3": 0, "ahm_4": 0,
-                "intra_bd": 0, "intra_sw": 0,
-                "ndd": 0, "oth": 0
-            } for block in NORMAL_BLOCKS
-        }
+        counts = {block: {"normal": set(), "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0} for block in NORMAL_BLOCKS}
 
         cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
         cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
         cfg_c = set([z.strip() for z in self.config_data.get("Block C", "").split(",") if z.strip()])
         cfg_e = set([z.strip() for z in self.config_data.get("Block E", "").split(",") if z.strip()])
+
+        is_day_shift = self.config_data.get("DayShift", True)
 
         headers = {
             "Sec-CH-UA": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
@@ -815,59 +614,41 @@ class FetchDynamicTasksThread(QThread):
                 }
 
                 res = requests.post(url, json=payload, headers=headers, timeout=10)
-                if res.status_code != 200:
-                    break
+                if res.status_code != 200: break
 
                 data = res.json().get("data", {})
                 batch_list = data.get("list", [])
                 total = data.get("total", 0)
 
                 for task in batch_list:
-                    dwog = str(task.get("dynamic_wave_order_group") or task.get("dynamic_wave_order_group_name") or "").strip()
                     channels = set(str(c) for c in task.get("channel_id_list", []))
+                    has_ahm = bool(channels & {"50033", "50044"})
+                    has_sdd = bool(channels & {"50051"})
+                    has_ndd = bool(channels & {"50057"})
+                    has_normal = bool(channels - {"50033", "50044", "50051", "50057"})
 
-                    task_type = None
-                    if dwog.startswith("[NDD] MSAQ"):
-                        task_type = "auto"
-                    elif dwog.startswith("SDD COT 1"):
-                        task_type = "sdd_1"
-                    elif dwog.startswith("SDD COT 2"):
-                        task_type = "sdd_2"
-                    elif dwog.startswith("SDD COT 3"):
-                        task_type = "sdd_3"
-                    elif dwog.startswith("SDD COT 4"):
-                        task_type = "sdd_4"
-                    elif dwog.startswith("SDD COT 5"):
-                        task_type = "sdd_5"
-                    elif dwog.startswith("SDD COT 6"):
-                        task_type = "sdd_6"
-                    elif dwog.startswith("AHM COT 1"):
-                        task_type = "ahm_1"
-                    elif dwog.startswith("AHM COT 2"):
-                        task_type = "ahm_2"
-                    elif dwog.startswith("AHM COT 3"):
-                        task_type = "ahm_3"
-                    elif dwog.startswith("AHM COT 4"):
-                        task_type = "ahm_4"
-                    elif dwog.startswith("IntraCity BDA/BDB"):
-                        task_type = "intra_bd"
-                    elif dwog.startswith("IntraCity SW"):
-                        task_type = "intra_sw"
-                    else:
-                        has_ahm = bool(channels & {"50033", "50044"})
-                        has_sdd = bool(channels & {"50051"})
-                        has_ndd = bool(channels & {"50057"})
-                        if has_ndd:
+                    other_special = sum([has_ahm, has_sdd])
+
+                    if has_ndd:
+                        if not has_ahm and not has_sdd and not has_normal:
                             task_type = "ndd"
-                        elif has_ahm:
-                            task_type = "ahm_1"
-                        elif has_sdd:
-                            task_type = "sdd_1"
+                        elif is_day_shift and not has_ahm and not has_sdd and has_normal:
+                            task_type = "normal"
                         else:
-                            task_type = "auto"
+                            task_type = "oth"
+                    else:
+                        if other_special > 1:
+                            task_type = "oth"
+                        elif has_ahm:
+                            task_type = "ahm"
+                        elif has_sdd:
+                            task_type = "sdd"
+                        else:
+                            task_type = "normal"
 
                     pickup_id = task.get("pickup_id")
-                    if task_type == "auto" and not pickup_id:
+
+                    if task_type == "normal" and not pickup_id:
                         continue
 
                     z_str = task.get("zone_list", "")
@@ -879,8 +660,8 @@ class FetchDynamicTasksThread(QThread):
                     has_e = bool(t_zones & cfg_e)
 
                     def record_task(block_key):
-                        if task_type == "auto":
-                            counts[block_key]["auto"].add(pickup_id)
+                        if task_type == "normal":
+                            counts[block_key]["normal"].add(pickup_id)
                         else:
                             counts[block_key][task_type] += 1
 
@@ -907,12 +688,11 @@ class FetchDynamicTasksThread(QThread):
 
             final_counts = {
                 k: {
-                    "auto": len(v["auto"]),
-                    "sdd_1": v["sdd_1"], "sdd_2": v["sdd_2"], "sdd_3": v["sdd_3"],
-                    "sdd_4": v["sdd_4"], "sdd_5": v["sdd_5"], "sdd_6": v["sdd_6"],
-                    "ahm_1": v["ahm_1"], "ahm_2": v["ahm_2"], "ahm_3": v["ahm_3"], "ahm_4": v["ahm_4"],
-                    "intra_bd": v["intra_bd"], "intra_sw": v["intra_sw"],
-                    "ndd": v["ndd"], "oth": v["oth"]
+                    "normal": len(v["normal"]),
+                    "ahm": v["ahm"],
+                    "sdd": v["sdd"],
+                    "ndd": v["ndd"],
+                    "oth": v["oth"]
                 } for k, v in counts.items()
             }
             self.tasks_fetched.emit(final_counts)
@@ -920,6 +700,7 @@ class FetchDynamicTasksThread(QThread):
         except Exception as e:
             print(f"[DEBUG][Dynamic Tasks] Exception: {e}")
             self.tasks_fetched.emit({})
+
 
 class FetchFlowTasksThread(QThread):
     tasks_fetched = pyqtSignal(dict)
@@ -945,14 +726,11 @@ class FetchFlowTasksThread(QThread):
             "Cookie": self.wms_cookie
         }
 
-        # Khởi tạo bảng thống kê cho 14 loại đơn theo từng ô gộp hiển thị
-        flow_data = {
-            z: {k: 0 for k in FLOW_TASK_GROUPS.keys()}
-            for z in FLOW_ZONES if z != "KHO_E"
-        }
+        flow_counts = {zone: 0 for zone in FLOW_ZONES}
+        ssaq_counts = {zone: 0 for zone in FLOW_ZONES}
         kho_e_counts = {"PT_N": 0, "PT_Q": 0, "TV": 0, "MGTL": 0, "GD": 0}
 
-        def fetch_flow_group(group_key, group_id):
+        def fetch_group(group_id, target_dict):
             url = f"https://wms.ssc.shopee.vn/api/v2/apps/process/flowpicking/get_progress_monitoring_stats?group_id={group_id}&area_dimension_type=1&efficiency_ratio=2"
             try:
                 res = requests.get(url, headers=headers, timeout=10)
@@ -962,11 +740,10 @@ class FetchFlowTasksThread(QThread):
                         if item.get("is_total") == 0 and item.get("area_name"):
                             area_name = item.get("area_name")
                             order_qty = item.get("order_qty", 0)
-                            parent_zone = SUBZONE_MAP.get(area_name)
-                            if parent_zone and parent_zone in flow_data:
-                                flow_data[parent_zone][group_key] += order_qty
-            except Exception as e:
-                print(f"[DEBUG][Flow Task API] Error {group_key}: {e}")
+                            if area_name in target_dict:
+                                target_dict[area_name] += order_qty
+            except Exception:
+                pass
 
         def fetch_group_total(group_id, key):
             url = f"https://wms.ssc.shopee.vn/api/v2/apps/process/flowpicking/get_progress_monitoring_stats?group_id={group_id}&area_dimension_type=1&efficiency_ratio=2"
@@ -981,21 +758,19 @@ class FetchFlowTasksThread(QThread):
             except Exception:
                 pass
 
-        # Gọi song song toàn bộ 14 nhóm Flow + 5 nhóm Kho E
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            futures = []
-            for g_key, g_id in FLOW_TASK_GROUPS.items():
-                futures.append(executor.submit(fetch_flow_group, g_key, g_id))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+            f1 = executor.submit(fetch_group, "VNVLFPOG0134", flow_counts)
+            f2 = executor.submit(fetch_group, "VNVLFPOG0189", ssaq_counts)
+            f3 = executor.submit(fetch_group_total, "VNVLFPOG0211", "PT_N")
+            f4 = executor.submit(fetch_group_total, "VNVLFPOG0219", "PT_Q")
+            f5 = executor.submit(fetch_group_total, "VNVLFPOG0220", "TV")
+            f6 = executor.submit(fetch_group_total, "VNVLFPOG0221", "MGTL")
+            f7 = executor.submit(fetch_group_total, "VNVLFPOG0222", "GD")
 
-            futures.append(executor.submit(fetch_group_total, "VNVLFPOG0211", "PT_N"))
-            futures.append(executor.submit(fetch_group_total, "VNVLFPOG0219", "PT_Q"))
-            futures.append(executor.submit(fetch_group_total, "VNVLFPOG0220", "TV"))
-            futures.append(executor.submit(fetch_group_total, "VNVLFPOG0221", "MGTL"))
-            futures.append(executor.submit(fetch_group_total, "VNVLFPOG0222", "GD"))
+            concurrent.futures.wait([f1, f2, f3, f4, f5, f6, f7])
 
-            concurrent.futures.wait(futures)
+        self.tasks_fetched.emit({"normal": flow_counts, "ssaq": ssaq_counts, "kho_e": kho_e_counts})
 
-        self.tasks_fetched.emit({"flow_data": flow_data, "kho_e": kho_e_counts})
 
 class FirebaseUpdateThread(QThread):
     finished_signal = pyqtSignal()
@@ -1010,8 +785,7 @@ class FirebaseUpdateThread(QThread):
         try:
             if self.action == "PUT" and self.data:
                 uid = self.data.get("user_id")
-                if not uid:
-                    return
+                if not uid: return
                 safe_uid = urllib.parse.quote(str(uid), safe='')
                 payload = {
                     "wms_id": self.data.get("wms_id", ""),
@@ -1037,6 +811,7 @@ class FirebaseUpdateThread(QThread):
         finally:
             self.finished_signal.emit()
 
+
 class FetchCookiesThread(QThread):
     finished_signal = pyqtSignal(str, str)
     error_signal = pyqtSignal(str)
@@ -1056,7 +831,8 @@ class FetchCookiesThread(QThread):
                     elif isinstance(w_data, list):
                         wfm_cookie = "; ".join(w_data)
                     elif isinstance(w_data, dict) and "cookie" in w_data:
-                        wfm_cookie = "; ".join(w_data["cookie"]) if isinstance(w_data["cookie"], list) else w_data["cookie"]
+                        wfm_cookie = "; ".join(w_data["cookie"]) if isinstance(w_data["cookie"], list) else w_data[
+                            "cookie"]
 
                 v_data = data.get("vnvl") or data.get("VNVL")
                 if v_data:
@@ -1065,13 +841,14 @@ class FetchCookiesThread(QThread):
                     elif isinstance(v_data, list):
                         wms_cookie = "; ".join(v_data)
                     elif isinstance(v_data, dict) and "cookie" in v_data:
-                        wms_cookie = "; ".join(v_data["cookie"]) if isinstance(v_data["cookie"], list) else v_data["cookie"]
-            if not wfm_cookie:
-                wfm_cookie = str(data)
+                        wms_cookie = "; ".join(v_data["cookie"]) if isinstance(v_data["cookie"], list) else v_data[
+                            "cookie"]
+            if not wfm_cookie: wfm_cookie = str(data)
 
             self.finished_signal.emit(wfm_cookie.strip(), wms_cookie.strip())
         except Exception as e:
             self.error_signal.emit(str(e))
+
 
 class ProcessApiThread(QThread):
     result_ready = pyqtSignal(object)
@@ -1084,8 +861,7 @@ class ProcessApiThread(QThread):
 
     def run(self):
         id_list = [x.strip() for x in re.split(r'[\s,]+', self.raw_text) if x.strip()]
-        if not id_list:
-            return
+        if not id_list: return
 
         headers_wfm = {
             "Sec-CH-UA": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
@@ -1170,7 +946,8 @@ class ProcessApiThread(QThread):
                             encrypt_data = match.group(1)
                             pii_url = "https://wfm.ssc.shopee.com/api/apps/pii/get_pii_data"
                             try:
-                                pii_res = requests.post(pii_url, json={"encrypt_data": encrypt_data}, headers=headers_wfm, timeout=10).json()
+                                pii_res = requests.post(pii_url, json={"encrypt_data": encrypt_data},
+                                                        headers=headers_wfm, timeout=10).json()
                                 if pii_res.get("retcode") == 0 and pii_res.get("data"):
                                     emp_name = pii_res["data"].get("decrypt_data", raw_name)
                                 else:
@@ -1194,7 +971,8 @@ class ProcessApiThread(QThread):
                     res_rule = requests.get(url_rule, headers=headers_wms, timeout=10).json()
                     if res_rule.get("retcode") == 0 and res_rule.get("data"):
                         payload_wms = dict(res_rule["data"])
-                        for k in ["id", "whs_id", "min_item_qty_per_mix_task", "simplified_checking", "hide_close_device"]:
+                        for k in ["id", "whs_id", "min_item_qty_per_mix_task", "simplified_checking",
+                                  "hide_close_device"]:
                             payload_wms.pop(k, None)
                         payload_wms.update({"user_id": int(emp_wmsid), "rule_id": "Pick0024", "user_email": emp_email,
                                             "email": emp_email, "working_zone_list": []})
@@ -1215,6 +993,7 @@ class ProcessApiThread(QThread):
             }
             self.result_ready.emit(result)
 
+
 class FetchFirebaseThread(QThread):
     data_fetched = pyqtSignal(object, object)
 
@@ -1230,6 +1009,7 @@ class FetchFirebaseThread(QThread):
         except Exception:
             self.data_fetched.emit(None, None)
 
+
 class ScanTextEdit(QTextEdit):
     enter_pressed = pyqtSignal(str)
 
@@ -1240,6 +1020,7 @@ class ScanTextEdit(QTextEdit):
             return
         super().keyPressEvent(event)
 
+
 class ZoneListWidget(QListWidget):
     items_dropped_signal = pyqtSignal(str, list)
 
@@ -1247,14 +1028,8 @@ class ZoneListWidget(QListWidget):
         super().__init__(parent)
         self.zone_id = zone_id
         self.scale = scale
-
-        # Nếu là ô gộp thì tự động tách thành nhiều dòng watermark
-        if watermark_text:
-            self.watermark_text = watermark_text
-        elif zone_id:
-            self.watermark_text = "\n".join(zone_id.split(","))
-        else:
-            self.watermark_text = "CHỜ XỬ LÝ"
+        display_title = zone_id
+        self.watermark_text = watermark_text if watermark_text else (display_title if display_title else "CHỜ XỬ LÝ")
 
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
@@ -1268,23 +1043,16 @@ class ZoneListWidget(QListWidget):
         painter = QPainter(self.viewport())
         painter.setRenderHint(QPainter.Antialiasing)
 
-        lines = self.watermark_text.split("\n")
-        num_lines = len(lines)
-
-        if num_lines >= 3:
-            font_size = max(18, int(32 * self.scale))
-        elif num_lines == 2:
-            font_size = max(24, int(46 * self.scale))
-        elif len(self.watermark_text) > 4:
-            font_size = max(22, int(42 * self.scale))
-        else:
-            font_size = max(36, int(72 * self.scale))
+        font_size = max(50, int(100 * self.scale))
+        if len(self.watermark_text) > 5:
+            font_size = max(30, int(60 * self.scale))
 
         font = QFont("Segoe UI", font_size, QFont.Bold)
         painter.setFont(font)
-        color = QColor(148, 163, 184, 45)
+        color = QColor(148, 163, 184, 50)
         painter.setPen(color)
-        painter.drawText(self.viewport().rect(), Qt.AlignCenter | Qt.TextWordWrap, self.watermark_text)
+        text = self.watermark_text
+        painter.drawText(self.viewport().rect(), Qt.AlignCenter | Qt.TextWordWrap, text)
         painter.end()
 
     def dropEvent(self, event):
@@ -1294,8 +1062,7 @@ class ZoneListWidget(QListWidget):
             return
 
         row = self.indexAt(event.pos()).row()
-        if row == -1:
-            row = self.count()
+        if row == -1: row = self.count()
 
         kho_e_grp = None
         kho_e_urg = "N"
@@ -1336,15 +1103,27 @@ class ZoneListWidget(QListWidget):
                     if self.zone_id == "KHO_E":
                         data["kho_e_group"], data["urgent"], data["kho_e_label"] = kho_e_grp, kho_e_urg, kho_e_lbl
                     elif self.zone_id in FLOW_ZONES:
-                        if data.get("urgent") not in ["Q", "S1", "S2", "S3", "S4", "S5", "S6", "A1", "A2", "A3", "A4", "IBD", "ISW"]:
-                            data["urgent"] = "N"
+                        pass
                     elif self.zone_id == "":
                         data["urgent"] = "N"
-                    else:
-                        if data.get("urgent") in ["Q"]:
-                            data["urgent"] = "N"
 
-                    taken_item.setText(format_picker_item_text(data))
+                    prefix = ""
+                    if self.zone_id == "KHO_E":
+                        prefix = f"[{data.get('kho_e_label', 'PT-N')}] "
+                    elif self.zone_id != "":
+                        urg = data.get("urgent", "N")
+                        if urg == "Y":
+                            prefix = "🔥 "
+                        elif urg == "A":
+                            prefix = "🅰️ "
+                        elif urg == "S":
+                            prefix = "🪼 "
+                        elif urg == "V":
+                            prefix = "🚀 "
+                        elif urg == "Q":
+                            prefix = "⚧️ "
+
+                    taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
                     taken_item.setForeground(QColor(data.get("color", "#1E293B")))
                     taken_item.setData(Qt.UserRole, data)
 
@@ -1356,11 +1135,12 @@ class ZoneListWidget(QListWidget):
         if dropped_data:
             self.items_dropped_signal.emit(self.zone_id, dropped_data)
 
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.scale = get_scale_factor()
-        self.setWindowTitle("Đa Vũ Trụ Tâm Linh - Xuyên Á Đại Đạo (Enhanced 2.0)")
+        self.setWindowTitle("Đa Vũ Trụ Tâm Linh - Xuyên Á Đại Đạo")
         self.setStyleSheet(get_dynamic_qss(self.scale))
 
         self.active_threads = []
@@ -1370,6 +1150,7 @@ class MainWindow(QMainWindow):
         self.task_counts = {}
         self.dynamic_task_counts = {}
         self.flow_task_counts = {}
+        self.flow_ssaq_counts = {}
         self.kho_e_task_counts = {}
 
         self.badges = {}
@@ -1438,7 +1219,8 @@ class MainWindow(QMainWindow):
 
         title_search_layout = QHBoxLayout()
         lbl_scan_title = QLabel("Quỷ Môn Quan")
-        lbl_scan_title.setStyleSheet(f"font-weight: 600; font-size: {max(11, int(14 * self.scale))}px; color: #475569; border: none;")
+        lbl_scan_title.setStyleSheet(
+            f"font-weight: 600; font-size: {max(11, int(14 * self.scale))}px; color: #475569; border: none;")
 
         self.txt_search = QLineEdit()
         self.txt_search.setPlaceholderText("🔍 Gọi Vong...")
@@ -1446,7 +1228,8 @@ class MainWindow(QMainWindow):
         self.txt_search.textChanged.connect(self.on_search_text_changed)
 
         self.lbl_search_count = QLabel("")
-        self.lbl_search_count.setStyleSheet(f"color: #64748B; font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; margin-left: 6px;")
+        self.lbl_search_count.setStyleSheet(
+            f"color: #64748B; font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; margin-left: 6px;")
 
         title_search_layout.addWidget(lbl_scan_title)
         title_search_layout.addStretch()
@@ -1471,7 +1254,8 @@ class MainWindow(QMainWindow):
 
         status_layout = QHBoxLayout()
         self.lbl_status = QLabel("Đang tải tài nguyên hệ thống...")
-        self.lbl_status.setStyleSheet(f"font-weight: 500; color: #64748B; border: none; font-size: {max(10, int(12 * self.scale))}px;")
+        self.lbl_status.setStyleSheet(
+            f"font-weight: 500; color: #64748B; border: none; font-size: {max(10, int(12 * self.scale))}px;")
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)
         status_layout.addWidget(self.lbl_status, stretch=8)
@@ -1494,7 +1278,8 @@ class MainWindow(QMainWindow):
         self.btn_shift_toggle = QPushButton("☀️ Ca Ngày")
         self.btn_shift_toggle.setCheckable(True)
         self.btn_shift_toggle.setChecked(True)
-        self.btn_shift_toggle.setStyleSheet("background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+        self.btn_shift_toggle.setStyleSheet(
+            "background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
         self.btn_shift_toggle.clicked.connect(self.on_shift_toggle_changed)
 
         btn_vbox.addWidget(btn_refresh)
@@ -1509,7 +1294,6 @@ class MainWindow(QMainWindow):
         workspace_layout = QHBoxLayout()
         workspace_layout.setSpacing(pad_main)
 
-        # Panel bên trái: Cõi Tạm (Giữ lại đếm số người)
         left_panel_container = QWidget()
         left_layout = QVBoxLayout(left_panel_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -1540,6 +1324,7 @@ class MainWindow(QMainWindow):
         right_layout.addLayout(tab_layout)
         self.stacked_widget = QStackedWidget()
 
+        # Normal Pick Tab
         normal_container = QWidget()
         normal_layout_main = QVBoxLayout(normal_container)
         normal_layout_main.setContentsMargins(0, 0, 0, 0)
@@ -1553,14 +1338,16 @@ class MainWindow(QMainWindow):
         self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 0, 3, True, watermark_text="AB")
 
         config_frame = QFrame()
-        config_frame.setStyleSheet("QFrame { border: 1px solid #E2E8F0; border-top: 4px solid #475569; border-radius: 8px; background-color: #F5F5F5; }")
+        config_frame.setStyleSheet(
+            "QFrame { border: 1px solid #E2E8F0; border-top: 4px solid #475569; border-radius: 8px; background-color: #F5F5F5; }")
 
         config_layout = QGridLayout(config_frame)
         config_layout.setContentsMargins(pad_main, pad_main, pad_main, pad_main)
         config_layout.setSpacing(int(4 * self.scale))
 
         lbl_cfg_title = QLabel("⚙️ Configuration")
-        lbl_cfg_title.setStyleSheet(f"font-weight: 600; font-size: {max(11, int(13 * self.scale))}px; color: #334155; border: none;")
+        lbl_cfg_title.setStyleSheet(
+            f"font-weight: 600; font-size: {max(11, int(13 * self.scale))}px; color: #334155; border: none;")
         config_layout.addWidget(lbl_cfg_title, 0, 0, 1, 2)
 
         self.txt_cfg_a = QLineEdit()
@@ -1570,7 +1357,8 @@ class MainWindow(QMainWindow):
 
         font_size_cfg = max(9, int(11 * self.scale))
 
-        for idx, (lbl_text, txt_widget) in enumerate([("A:", self.txt_cfg_a), ("B:", self.txt_cfg_b), ("C:", self.txt_cfg_c), ("E:", self.txt_cfg_e)]):
+        for idx, (lbl_text, txt_widget) in enumerate(
+                [("A:", self.txt_cfg_a), ("B:", self.txt_cfg_b), ("C:", self.txt_cfg_c), ("E:", self.txt_cfg_e)]):
             lbl = QLabel(lbl_text)
             lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
             txt_widget.setReadOnly(True)
@@ -1578,7 +1366,8 @@ class MainWindow(QMainWindow):
             config_layout.addWidget(txt_widget, idx + 1, 1)
 
         lbl_dynamic_title = QLabel("⚡ Dynamic Wave Config")
-        lbl_dynamic_title.setStyleSheet(f"font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; color: #9333EA; border: none; margin-top: 4px;")
+        lbl_dynamic_title.setStyleSheet(
+            f"font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; color: #9333EA; border: none; margin-top: 4px;")
         config_layout.addWidget(lbl_dynamic_title, 5, 0, 1, 2)
 
         self.toggle_sdd = ToggleSwitch()
@@ -1592,19 +1381,21 @@ class MainWindow(QMainWindow):
         self.toggle_sdd.clicked.connect(lambda checked, name="SDD": self.on_toggle_changed(name))
         self.toggle_ahm.clicked.connect(lambda checked, name="AHM": self.on_toggle_changed(name))
         self.toggle_ds_ndd_normal.clicked.connect(lambda checked, name="D-S NDD normal": self.on_toggle_changed(name))
-        self.toggle_ds_ndd_phu_thai.clicked.connect(lambda checked, name="D-S NDD Phú Thái": self.on_toggle_changed(name))
+        self.toggle_ds_ndd_phu_thai.clicked.connect(
+            lambda checked, name="D-S NDD Phú Thái": self.on_toggle_changed(name))
         self.toggle_ns_ndd_normal.clicked.connect(lambda checked, name="N-S NDD normal": self.on_toggle_changed(name))
-        self.toggle_ns_ndd_phu_thai.clicked.connect(lambda checked, name="N-S NDD Phú Thái": self.on_toggle_changed(name))
+        self.toggle_ns_ndd_phu_thai.clicked.connect(
+            lambda checked, name="N-S NDD Phú Thái": self.on_toggle_changed(name))
         self.toggle_dminus.clicked.connect(lambda checked, name="D-": self.on_toggle_changed(name))
 
-        for idx, (lbl_text, toggle_widget) in enumerate([
-            ("SDD:", self.toggle_sdd),
-            ("AHM:", self.toggle_ahm),
-            ("D-S NDD normal:", self.toggle_ds_ndd_normal),
-            ("D-S NDD Phú Thái:", self.toggle_ds_ndd_phu_thai),
-            ("N-S NDD normal:", self.toggle_ns_ndd_normal),
-            ("N-S NDD Phú Thái:", self.toggle_ns_ndd_phu_thai),
-            ("D-:", self.toggle_dminus)]):
+        for idx, (lbl_text, toggle_widget) in enumerate(
+                [("SDD:", self.toggle_sdd),
+                 ("AHM:", self.toggle_ahm),
+                 ("D-S NDD normal:", self.toggle_ds_ndd_normal),
+                 ("D-S NDD Phú Thái:", self.toggle_ds_ndd_phu_thai),
+                 ("N-S NDD normal:", self.toggle_ns_ndd_normal),
+                 ("N-S NDD Phú Thái:", self.toggle_ns_ndd_phu_thai),
+                 ("D-:", self.toggle_dminus)]):
             lbl = QLabel(lbl_text)
             lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
             config_layout.addWidget(lbl, 6 + idx, 0)
@@ -1613,7 +1404,7 @@ class MainWindow(QMainWindow):
         self.btn_edit_config = QPushButton("Chỉnh sửa")
         self.btn_edit_config.setStyleSheet("margin-top: 8px;")
         self.btn_edit_config.clicked.connect(self.toggle_config_edit)
-        config_layout.addWidget(self.btn_edit_config, 13, 0, 1, 2)
+        config_layout.addWidget(self.btn_edit_config, 12, 0, 1, 2)
 
         normal_grid.addWidget(config_frame, 0, 4, 2, 1)
 
@@ -1625,6 +1416,7 @@ class MainWindow(QMainWindow):
         normal_layout_main.addLayout(normal_grid)
         self.stacked_widget.addWidget(normal_container)
 
+        # Flow Pick Tab
         flow_container = QWidget()
         flow_layout_main = QVBoxLayout(flow_container)
         flow_layout_main.setContentsMargins(0, 0, 0, 0)
@@ -1637,266 +1429,47 @@ class MainWindow(QMainWindow):
         flow_color_c = "#8B5CF6"
         flow_color_d = "#10B981"
 
-        # Row 0: 4 ô gộp & ô đơn (nhãn và watermark tự động xuống dòng)
-        self.create_zone_box(flow_grid, "A1,A2", flow_color_a, 0, 0, True)
-        self.create_zone_box(flow_grid, "A3,A4", flow_color_a, 0, 1, True)
-        self.create_zone_box(flow_grid, "B1,B3,HV,FD", flow_color_b, 0, 2, True)
-        self.create_zone_box(flow_grid, "B2", flow_color_b, 0, 3, True)
+        self.create_zone_box(flow_grid, "A1", flow_color_a, 0, 0, True, watermark_text="A1")
+        self.create_zone_box(flow_grid, "A2", flow_color_a, 0, 1, True, watermark_text="A2")
+        self.create_zone_box(flow_grid, "A3", flow_color_a, 0, 2, True, watermark_text="A3")
+        self.create_zone_box(flow_grid, "A4", flow_color_a, 0, 3, True, watermark_text="A4")
+        self.create_zone_box(flow_grid, "B1", flow_color_b, 0, 4, True, watermark_text="B1")
+        self.create_zone_box(flow_grid, "B2", flow_color_b, 0, 5, True, watermark_text="B2")
+        self.create_zone_box(flow_grid, "B3", flow_color_b, 0, 6, True, watermark_text="B3")
+        self.create_zone_box(flow_grid, "B4", flow_color_b, 0, 7, True, watermark_text="B4")
+        self.create_zone_box(flow_grid, "B5", flow_color_b, 0, 8, True, watermark_text="B5")
 
-        # Row 1: 4 ô gộp & ô đơn
-        self.create_zone_box(flow_grid, "B4", flow_color_b, 1, 0, True)
-        self.create_zone_box(flow_grid, "C1,C2,C3", flow_color_c, 1, 1, True)
-        self.create_zone_box(flow_grid, "TOP", flow_color_d, 1, 2, True)
-        self.create_zone_box(flow_grid, "KHO_E", flow_color_d, 1, 3, True, watermark_text="KHO E")
+        self.create_zone_box(flow_grid, "HV", flow_color_b, 1, 0, True, watermark_text="HV")
+        self.create_zone_box(flow_grid, "FD", flow_color_b, 1, 1, True, watermark_text="FD")
+        self.create_zone_box(flow_grid, "C1", flow_color_c, 1, 2, True, watermark_text="C1")
+        self.create_zone_box(flow_grid, "C2", flow_color_c, 1, 3, True, watermark_text="C2")
+        self.create_zone_box(flow_grid, "C3", flow_color_c, 1, 4, True, watermark_text="C3")
+
+        self.create_zone_box(flow_grid, "KHO_E", flow_color_d, 1, 6, is_grid=True, colspan=3, watermark_text="KHO E")
+        self.create_zone_box(flow_grid, "TOP", flow_color_d, 1, 5, True, watermark_text="TOP")
 
         flow_layout_main.addLayout(flow_grid)
         self.stacked_widget.addWidget(flow_container)
 
         right_layout.addWidget(self.stacked_widget, stretch=1)
         workspace_layout.addWidget(right_panel, stretch=7)
+
         main_layout.addLayout(workspace_layout)
-
-    def create_zone_box(self, parent_layout, zone_id, top_border_color, row, col, is_grid=False, show_badge=True,
-                        colspan=1, is_left_panel=False, watermark_text=None):
-        box_frame = QFrame()
-        box_frame.setObjectName("zone_box_frame")
-
-        box_style = f"""
-        #zone_box_frame {{
-            border: 1px solid #E2E8F0;
-            border-top: 4px solid {top_border_color};
-            border-radius: 8px;
-            background-color: #F5F5F5;
-        }}
-        """
-        box_frame.setStyleSheet(box_style)
-
-        box_layout = QVBoxLayout(box_frame)
-        pad_box = max(4, int(6 * self.scale))
-        box_layout.setContentsMargins(pad_box, pad_box, pad_box, pad_box)
-        box_layout.setSpacing(int(4 * self.scale))
-
-        h_layout = QHBoxLayout()
-        h_layout.setContentsMargins(0, 0, 0, 0)
-        h_layout.setAlignment(Qt.AlignVCenter)
-
-        lw_id = "" if is_left_panel else zone_id
-        badges_dict = {}
-        font_size_badge = max(10, int(12 * self.scale))
-
-        if is_left_panel:
-            lbl_title = QLabel(zone_id)
-            font_size_title = max(11, int(14 * self.scale))
-            lbl_title.setStyleSheet(f"font-weight: 700; font-size: {font_size_title}px; color: #1E293B;")
-            h_layout.addWidget(lbl_title)
-            h_layout.addStretch()
-
-            lbl_people = QLabel("👤 0")
-            lbl_people.setStyleSheet(
-                f"background-color: #FFFFFF; color: {top_border_color}; font-weight: 700; border: 1px solid #CBD5E1; border-radius: 6px; padding: 5px 8px; font-size: {font_size_badge}px;")
-            lbl_people.setAlignment(Qt.AlignCenter)
-            h_layout.addWidget(lbl_people)
-            badges_dict["people"] = lbl_people
-
-        elif lw_id == "KHO_E":
-            lbl_title = QLabel("KHO E")
-            lbl_title.setStyleSheet(f"font-weight: 700; font-size: {max(10, int(12 * self.scale))}px; color: #1E293B;")
-            h_layout.addWidget(lbl_title)
-            h_layout.addStretch()
-
-            lbl_pt = QLabel("PT\n0|0")
-            lbl_pt.setStyleSheet(f"background-color: #FFFFFF; color: #0891B2; font-weight: 700; border: 1px solid #A5F3FC; border-radius: 6px; padding: 3px 6px; font-size: {font_size_badge}px;")
-            lbl_pt.setAlignment(Qt.AlignCenter)
-
-            lbl_tv = QLabel("TV\n0")
-            lbl_tv.setStyleSheet(f"background-color: #FFFFFF; color: #EA580C; font-weight: 700; border: 1px solid #FDBA74; border-radius: 6px; padding: 3px 6px; font-size: {font_size_badge}px;")
-            lbl_tv.setAlignment(Qt.AlignCenter)
-
-            lbl_mgtl = QLabel("MGTL\n0")
-            lbl_mgtl.setStyleSheet(f"background-color: #FFFFFF; color: #7C3AED; font-weight: 700; border: 1px solid #C4B5FD; border-radius: 6px; padding: 3px 6px; font-size: {font_size_badge}px;")
-            lbl_mgtl.setAlignment(Qt.AlignCenter)
-
-            lbl_gd = QLabel("GD\n0")
-            lbl_gd.setStyleSheet(f"background-color: #FFFFFF; color: #059669; font-weight: 700; border: 1px solid #6EE7B7; border-radius: 6px; padding: 3px 6px; font-size: {font_size_badge}px;")
-            lbl_gd.setAlignment(Qt.AlignCenter)
-
-            h_layout.addWidget(lbl_pt)
-            h_layout.addWidget(lbl_tv)
-            h_layout.addWidget(lbl_mgtl)
-            h_layout.addWidget(lbl_gd)
-            badges_dict.update({"pt": lbl_pt, "tv": lbl_tv, "mgtl": lbl_mgtl, "gd": lbl_gd})
-
-        elif lw_id in NORMAL_BLOCKS:
-            lbl_title = QLabel(zone_id)
-            lbl_title.setStyleSheet(f"font-weight: 700; font-size: {max(10, int(13 * self.scale))}px; color: #1E293B;")
-            h_layout.addWidget(lbl_title)
-            h_layout.addStretch()
-
-            lbl_normal_stats = QLabel()
-            lbl_normal_stats.setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 8px;")
-            lbl_normal_stats.setTextFormat(Qt.RichText)
-            h_layout.addWidget(lbl_normal_stats)
-            badges_dict["normal_stats"] = lbl_normal_stats
-
-        elif lw_id in FLOW_ZONES:
-            # Nhãn zone: mỗi zone xuống 1 dòng thay vì dấu +
-            sub_zones = [z.strip() for z in zone_id.split(",") if z.strip()]
-            title_text = "<br/>".join(sub_zones)
-            lbl_title = QLabel(f"<b>{title_text}</b>")
-            lbl_title.setTextFormat(Qt.RichText)
-            lbl_title.setStyleSheet(f"color: {top_border_color}; font-size: {max(11, int(13 * self.scale))}px; border: none; font-weight: 700;")
-            lbl_title.setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-            h_layout.addWidget(lbl_title)
-            h_layout.addStretch()
-
-            lbl_flow_stats = QLabel()
-            lbl_flow_stats.setStyleSheet("background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 8px;")
-            lbl_flow_stats.setTextFormat(Qt.RichText)
-            h_layout.addWidget(lbl_flow_stats)
-            badges_dict["flow_stats"] = lbl_flow_stats
-
-        self.badges[lw_id] = badges_dict
-        box_layout.addLayout(h_layout)
-
-        lw = ZoneListWidget(lw_id, self.scale, watermark_text=watermark_text)
-        lw.setStyleSheet("QListWidget { border: none; background-color: transparent; }")
-        lw.items_dropped_signal.connect(self.on_items_dropped_to_zone)
-        lw.itemDoubleClicked.connect(self.on_item_double_clicked)
-        lw.setContextMenuPolicy(Qt.CustomContextMenu)
-        lw.customContextMenuRequested.connect(lambda pos, lw_ref=lw: self.on_context_menu(pos, lw_ref))
-        box_layout.addWidget(lw)
-
-        if is_left_panel:
-            parent_layout.addWidget(box_frame)
-        elif is_grid:
-            parent_layout.addWidget(box_frame, row, col, 1, colspan)
-        else:
-            parent_layout.addWidget(box_frame)
-
-        self.listboxes[lw_id] = lw
-
-    @staticmethod
-    def format_cot_metric(label, count, active_color="#DC2626", zero_color="#94A3B8"):
-        """Làm nổi bật số lượng nếu có đơn (> 0) và làm mờ nếu = 0"""
-        if count > 0:
-            return f"<span style='color:{active_color}; background-color:#FEF08A; font-weight:800;'>&nbsp;<b>{label}:{count}</b>&nbsp;</span>"
-        return f"<span style='color:{zero_color};'>{label}:0</span>"
-
-    def update_all_badges(self):
-        if not hasattr(self, 'badges'):
-            return
-        total_normal = 0
-        total_flow = 0
-        font_size_badge = max(10, int(12 * self.scale))
-
-        for z_id, lb in self.listboxes.items():
-            people_count = lb.count()
-
-            if z_id in NORMAL_BLOCKS:
-                total_normal += people_count
-            elif z_id in FLOW_ZONES:
-                total_flow += people_count
-
-            if z_id in self.badges:
-                b_dict = self.badges[z_id]
-                if "people" in b_dict:
-                    b_dict["people"].setText(f"👤 {people_count}")
-
-                if z_id == "KHO_E":
-                    counts = self.kho_e_task_counts
-                    if "pt" in b_dict:
-                        b_dict["pt"].setText(f"PT\n{counts.get('PT_N', 0)}|{counts.get('PT_Q', 0)}")
-                    if "tv" in b_dict:
-                        b_dict["tv"].setText(f"TV\n{counts.get('TV', 0)}")
-                    if "mgtl" in b_dict:
-                        b_dict["mgtl"].setText(f"MGTL\n{counts.get('MGTL', 0)}")
-                    if "gd" in b_dict:
-                        b_dict["gd"].setText(f"GD\n{counts.get('GD', 0)}")
-
-                elif z_id in NORMAL_BLOCKS:
-                    task_data = self.task_counts.get(z_id, {})
-                    dyn_data = self.dynamic_task_counts.get(z_id, {})
-
-                    w_norm = task_data.get("normal", 0)
-                    a_norm = dyn_data.get("auto", 0)
-                    ndd = task_data.get("ndd", 0) + dyn_data.get("ndd", 0)
-
-                    ibd = dyn_data.get("intra_bd", 0)
-                    isw = dyn_data.get("intra_sw", 0)
-                    ibd_fmt = self.format_cot_metric("BD", ibd, active_color="#D97706")
-                    isw_fmt = self.format_cot_metric("SW", isw, active_color="#D97706")
-
-                    sdd_items = [
-                        self.format_cot_metric(f"C{i}", dyn_data.get(f"sdd_{i}", 0), active_color="#DC2626")
-                        for i in range(1, 7)
-                    ]
-                    ahm_items = [
-                        self.format_cot_metric(f"C{i}", dyn_data.get(f"ahm_{i}", 0), active_color="#DC2626")
-                        for i in range(1, 5)
-                    ]
-
-                    sdd_str = " ".join(sdd_items)
-                    ahm_str = " ".join(ahm_items)
-
-                    html_text = f"""
-                    <div style='font-size: {font_size_badge}px; line-height: 1.35;'>
-                        <b>📦 Nor:</b> W:<span style='color:#0284C7; font-weight:700;'>{w_norm}</span> | ⚡A:<span style='color:#2563EB; font-weight:700;'>{a_norm}</span> &nbsp;|&nbsp; <b>🚀 NDD:</b> <span style='color:#E11D48; font-weight:700;'>{ndd}</span><br/>
-                        <b>🚚 InTra:</b> {ibd_fmt} {isw_fmt}<br/>
-                        <b style='color:#059669;'>🪼 SDD:</b> {sdd_str}<br/>
-                        <b style='color:#DC2626;'>🅰️ AHM:</b> {ahm_str}
-                    </div>
-                    """
-                    if "normal_stats" in b_dict:
-                        b_dict["normal_stats"].setText(html_text.strip())
-
-                elif z_id in FLOW_ZONES:
-                    z_stats = self.flow_task_counts.get(z_id, {})
-                    nor = z_stats.get("normal", 0)
-                    ssaq = z_stats.get("ssaq", 0)
-
-                    ibd = z_stats.get("intra_bd", 0)
-                    isw = z_stats.get("intra_sw", 0)
-                    ibd_fmt = self.format_cot_metric("BD", ibd, active_color="#D97706")
-                    isw_fmt = self.format_cot_metric("SW", isw, active_color="#D97706")
-
-                    sdd_items = [
-                        self.format_cot_metric(f"C{i}", z_stats.get(f"sdd_{i}", 0), active_color="#DC2626")
-                        for i in range(1, 7)
-                    ]
-                    ahm_items = [
-                        self.format_cot_metric(f"C{i}", z_stats.get(f"ahm_{i}", 0), active_color="#DC2626")
-                        for i in range(1, 5)
-                    ]
-
-                    sdd_str = " ".join(sdd_items)
-                    ahm_str = " ".join(ahm_items)
-
-                    html_text = f"""
-                    <div style='font-size: {font_size_badge}px; line-height: 1.35;'>
-                        <b>📦 Nor:</b> <span style='color:#0284C7; font-weight:700;'>{nor}</span> &nbsp;|&nbsp; <b>⚧️ SSAQ:</b> <span style='color:#9333EA; font-weight:700;'>{ssaq}</span> &nbsp;|&nbsp; <b>🚚 InTra:</b> {ibd_fmt} {isw_fmt}<br/>
-                        <b style='color:#059669;'>🪼 SDD:</b> {sdd_str}<br/>
-                        <b style='color:#DC2626;'>🅰️ AHM:</b> {ahm_str}
-                    </div>
-                    """
-                    if "flow_stats" in b_dict:
-                        b_dict["flow_stats"].setText(html_text.strip())
-
-        if hasattr(self, 'btn_tab_normal'):
-            self.btn_tab_normal.setText(f"🎯 PICK NORMAL (👤 Tổng: {total_normal})")
-            self.btn_tab_flow.setText(f"🌊 FLOW PICK (👤 Tổng: {total_flow})")
 
     def on_shift_toggle_changed(self):
         is_day = self.btn_shift_toggle.isChecked()
         if is_day:
             self.btn_shift_toggle.setText("☀️ Ca Ngày")
-            self.btn_shift_toggle.setStyleSheet("background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+            self.btn_shift_toggle.setStyleSheet(
+                "background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
             self.toggle_ds_ndd_normal.setChecked(True)
             self.toggle_ds_ndd_phu_thai.setChecked(True)
             self.toggle_ns_ndd_normal.setChecked(False)
             self.toggle_ns_ndd_phu_thai.setChecked(False)
         else:
             self.btn_shift_toggle.setText("🌙 Ca Đêm")
-            self.btn_shift_toggle.setStyleSheet("background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+            self.btn_shift_toggle.setStyleSheet(
+                "background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
             self.toggle_ds_ndd_normal.setChecked(False)
             self.toggle_ds_ndd_phu_thai.setChecked(False)
             self.toggle_ns_ndd_normal.setChecked(True)
@@ -1962,9 +1535,28 @@ class MainWindow(QMainWindow):
                 wms_id_search = wms_id.lower()
                 user_id_search = user_id.lower()
 
-                base_text = format_picker_item_text(data)
+                block = data.get("block", "")
 
-                if search_term and (search_term in name_search or search_term in wms_id_search or search_term in user_id_search):
+                prefix = ""
+                if block == "KHO_E":
+                    prefix = f"[{data.get('kho_e_label', 'PT-N')}] "
+                elif block != "":
+                    urg = data.get("urgent", "N")
+                    if urg == "Y":
+                        prefix = "🔥 "
+                    elif urg == "A":
+                        prefix = "🅰️ "
+                    elif urg == "S":
+                        prefix = "🪼 "
+                    elif urg == "V":
+                        prefix = "🚀 "
+                    elif urg == "Q":
+                        prefix = "⚧️ "
+
+                base_text = f'{prefix}{name_raw} - {wms_id}'
+
+                if search_term and (
+                        search_term in name_search or search_term in wms_id_search or search_term in user_id_search):
                     item.setText(f"⭐ {base_text}")
                     item.setBackground(QColor("#FEF08A"))
                     item.setForeground(QColor("#C2410C"))
@@ -1984,10 +1576,12 @@ class MainWindow(QMainWindow):
         if search_term:
             if match_count > 0:
                 self.lbl_search_count.setText(f"({match_count} kết quả)")
-                self.lbl_search_count.setStyleSheet(f"color: #D97706; font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; margin-left: 6px;")
+                self.lbl_search_count.setStyleSheet(
+                    f"color: #D97706; font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; margin-left: 6px;")
             else:
                 self.lbl_search_count.setText("(0 kết quả)")
-                self.lbl_search_count.setStyleSheet(f"color: #EF4444; font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; margin-left: 6px;")
+                self.lbl_search_count.setStyleSheet(
+                    f"color: #EF4444; font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; margin-left: 6px;")
         else:
             self.lbl_search_count.setText("")
 
@@ -2047,6 +1641,179 @@ class MainWindow(QMainWindow):
         self.btn_tab_flow.style().unpolish(self.btn_tab_flow)
         self.btn_tab_flow.style().polish(self.btn_tab_flow)
 
+    def create_zone_box(self, parent_layout, zone_id, top_border_color, row, col, is_grid=False, show_badge=True,
+                        colspan=1, is_left_panel=False, watermark_text=None):
+        box_frame = QFrame()
+        box_frame.setObjectName("zone_box_frame")
+
+        box_style = f"""
+        #zone_box_frame {{
+            border: 1px solid #E2E8F0;
+            border-top: 4px solid {top_border_color};
+            border-radius: 8px;
+            background-color: #F5F5F5;
+        }}
+        """
+        box_frame.setStyleSheet(box_style)
+
+        box_layout = QVBoxLayout(box_frame)
+        pad_box = max(4, int(6 * self.scale))
+        box_layout.setContentsMargins(pad_box, pad_box, pad_box, pad_box)
+        box_layout.setSpacing(int(4 * self.scale))
+
+        h_layout = QHBoxLayout()
+        h_layout.setContentsMargins(0, 0, 0, 0)
+
+        lw_id = "" if is_left_panel else zone_id
+
+        if is_left_panel:
+            lbl_title = QLabel(zone_id)
+            font_size_title = max(10, int(13 * self.scale))
+            lbl_title.setStyleSheet(f"font-weight: 600; font-size: {font_size_title}px; color: #1E293B;")
+            h_layout.addWidget(lbl_title)
+            h_layout.addStretch()
+
+        if show_badge:
+            font_size_badge = max(9, int(11 * self.scale))
+
+            lbl_people = QLabel("👤 0")
+            lbl_people.setStyleSheet(
+                f"background-color: #FFFFFF; color: {top_border_color}; font-weight: 600; border: 1px solid #E2E8F0; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
+            lbl_people.setAlignment(Qt.AlignCenter)
+            badges_dict = {"people": lbl_people}
+
+            if lw_id == "KHO_E":
+                lbl_pt = QLabel("Phú Thái\n📦 0 | ⚧️ 0")
+                lbl_pt.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #06B6D4; font-weight: 600; border: 1px solid #A5F3FC; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
+                lbl_tv = QLabel("Tivi\n📦 0")
+                lbl_tv.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #F97316; font-weight: 600; border: 1px solid #FDBA74; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
+                lbl_mgtl = QLabel("MGTL\n📦 0")
+                lbl_mgtl.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #8B5CF6; font-weight: 600; border: 1px solid #C4B5FD; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
+                lbl_gd = QLabel("Gia Dụng\n📦 0")
+                lbl_gd.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #10B981; font-weight: 600; border: 1px solid #6EE7B7; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
+
+                h_layout.addWidget(lbl_people)
+                h_layout.addWidget(lbl_pt)
+                h_layout.addWidget(lbl_tv)
+                h_layout.addWidget(lbl_mgtl)
+                h_layout.addWidget(lbl_gd)
+                h_layout.addStretch()
+
+                badges_dict.update({"pt": lbl_pt, "tv": lbl_tv, "mgtl": lbl_mgtl, "gd": lbl_gd})
+
+            elif lw_id in NORMAL_BLOCKS:
+                lbl_normal = QLabel("Normal\n📦 Wave: 0\n⚡ Auto: 0")
+                lbl_normal.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #3B82F6; font-weight: 600; border: 1px solid #BFDBFE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
+                lbl_normal.setAlignment(Qt.AlignCenter)
+
+                lbl_urgent = QLabel("Hỏa Tốc\n🅰️ AHM: 0\n🪼 SDD: 0\n🚀 NDD: 0\n📦 Mix: 0")
+                lbl_urgent.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #EF4444; font-weight: 600; border: 1px solid #FECACA; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
+                lbl_urgent.setAlignment(Qt.AlignCenter)
+
+                h_layout.addWidget(lbl_normal)
+                h_layout.addStretch()
+                h_layout.addWidget(lbl_people)
+                h_layout.addStretch()
+                h_layout.addWidget(lbl_urgent)
+
+                badges_dict["normal"] = lbl_normal
+                badges_dict["urgent"] = lbl_urgent
+            elif lw_id in FLOW_ZONES:
+                lbl_flow = QLabel("📦 0")
+                lbl_flow.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #06B6D4; font-weight: 600; border: 1px solid #A5F3FC; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
+                lbl_flow.setAlignment(Qt.AlignCenter)
+
+                lbl_ssaq = QLabel("⚧️ 0")
+                lbl_ssaq.setStyleSheet(
+                    f"background-color: #FFFFFF; color: #9333EA; font-weight: 600; border: 1px solid #D8B4FE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
+                lbl_ssaq.setAlignment(Qt.AlignCenter)
+
+                h_layout.addWidget(lbl_people)
+                h_layout.addWidget(lbl_flow)
+                h_layout.addWidget(lbl_ssaq)
+                h_layout.addStretch()
+                badges_dict["flow"] = lbl_flow
+                badges_dict["ssaq"] = lbl_ssaq
+            else:
+                h_layout.addWidget(lbl_people)
+
+            self.badges[lw_id] = badges_dict
+
+        box_layout.addLayout(h_layout)
+
+        lw = ZoneListWidget(lw_id, self.scale, watermark_text=watermark_text)
+        lw.setStyleSheet("QListWidget { border: none; background-color: transparent; }")
+        lw.items_dropped_signal.connect(self.on_items_dropped_to_zone)
+        lw.itemDoubleClicked.connect(self.on_item_double_clicked)
+        lw.setContextMenuPolicy(Qt.CustomContextMenu)
+        lw.customContextMenuRequested.connect(lambda pos, lw_ref=lw: self.on_context_menu(pos, lw_ref))
+        box_layout.addWidget(lw)
+
+        if is_left_panel:
+            parent_layout.addWidget(box_frame)
+        elif is_grid:
+            parent_layout.addWidget(box_frame, row, col, 1, colspan)
+        else:
+            parent_layout.addWidget(box_frame)
+
+        self.listboxes[lw_id] = lw
+
+    def update_all_badges(self):
+        if not hasattr(self, 'badges'): return
+        total_normal = 0
+        total_flow = 0
+
+        for z_id, lb in self.listboxes.items():
+            people_count = lb.count()
+
+            if z_id in NORMAL_BLOCKS:
+                total_normal += people_count
+            elif z_id in FLOW_ZONES:
+                total_flow += people_count
+
+            if z_id in self.badges:
+                b_dict = self.badges[z_id]
+                b_dict["people"].setText(f"👤 {people_count}")
+
+                if z_id == "KHO_E":
+                    counts = self.kho_e_task_counts
+                    if "pt" in b_dict: b_dict["pt"].setText(
+                        f"Phú Thái\n📦 {counts.get('PT_N', 0)} | ⚧️ {counts.get('PT_Q', 0)}")
+                    if "tv" in b_dict: b_dict["tv"].setText(f"Tivi\n📦 {counts.get('TV', 0)}")
+                    if "mgtl" in b_dict: b_dict["mgtl"].setText(f"MGTL\n📦 {counts.get('MGTL', 0)}")
+                    if "gd" in b_dict: b_dict["gd"].setText(f"Gia Dụng\n📦 {counts.get('GD', 0)}")
+                elif z_id in NORMAL_BLOCKS:
+                    task_data = self.task_counts.get(z_id, {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0})
+                    dyn_data = self.dynamic_task_counts.get(z_id, {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0})
+
+                    t_norm = task_data.get("normal", 0) + dyn_data.get("normal", 0)
+                    d_norm = dyn_data.get("normal", 0)
+
+                    t_ahm = task_data.get("ahm", 0) + dyn_data.get("ahm", 0)
+                    t_sdd = task_data.get("sdd", 0) + dyn_data.get("sdd", 0)
+                    t_ndd = task_data.get("ndd", 0) + dyn_data.get("ndd", 0)
+                    t_oth = task_data.get("oth", 0) + dyn_data.get("oth", 0)
+
+                    b_dict["normal"].setText(f"Normal\n📦 Wave: {task_data.get('normal', 0)}\n⚡ Auto: {d_norm}")
+                    b_dict["urgent"].setText(
+                        f"Hỏa Tốc\n🅰️ AHM: {t_ahm}\n🪼 SDD: {t_sdd}\n🚀 NDD: {t_ndd}\n📦 Mix: {t_oth}")
+                elif z_id in FLOW_ZONES:
+                    f_qty = self.flow_task_counts.get(z_id, 0)
+                    q_qty = self.flow_ssaq_counts.get(z_id, 0)
+                    if "flow" in b_dict: b_dict["flow"].setText(f"📦 {f_qty}")
+                    if "ssaq" in b_dict: b_dict["ssaq"].setText(f"⚧️ {q_qty}")
+
+        if hasattr(self, 'btn_tab_normal'):
+            self.btn_tab_normal.setText(f"🎯 PICK NORMAL (👤 Tổng: {total_normal})")
+            self.btn_tab_flow.setText(f"🌊 FLOW PICK (👤 Tổng: {total_flow})")
+
     def start_initialization(self):
         cookie_thread = FetchCookiesThread()
         cookie_thread.finished_signal.connect(self.on_cookies_fetched)
@@ -2070,8 +1837,7 @@ class MainWindow(QMainWindow):
 
     def on_scan_triggered(self, text):
         self.txt_scan.clear()
-        if not text.strip():
-            return
+        if not text.strip(): return
         self.lbl_status.setText("Đang gọi API lấy thông tin nhân sự...")
         self.lbl_status.setStyleSheet("color: #3B82F6;")
         api_thread = ProcessApiThread(text, self.wfm_cookie, self.wms_cookie)
@@ -2081,8 +1847,7 @@ class MainWindow(QMainWindow):
     @pyqtSlot(object)
     def add_item_to_ui_and_firebase(self, data):
         uid = data.get("user_id", "")
-        if not uid:
-            return
+        if not uid: return
 
         if uid in self.current_firebase_data:
             data["block"] = self.current_firebase_data[uid].get("block", "")
@@ -2096,7 +1861,8 @@ class MainWindow(QMainWindow):
         for lb in self.listboxes.values():
             for i in range(lb.count()):
                 existing_item = lb.item(i)
-                if existing_item and isinstance(existing_item.data(Qt.UserRole), dict) and existing_item.data(Qt.UserRole).get("user_id") == uid:
+                if existing_item and isinstance(existing_item.data(Qt.UserRole), dict) and existing_item.data(
+                        Qt.UserRole).get("user_id") == uid:
                     lb.takeItem(i)
                     break
 
@@ -2105,7 +1871,24 @@ class MainWindow(QMainWindow):
         target_lb = self.listboxes.get(block_name, fallback_lb)
 
         item = QListWidgetItem("")
-        item.setText(format_picker_item_text(data))
+
+        prefix = ""
+        if block_name == "KHO_E":
+            prefix = f"[{data.get('kho_e_label', 'PT-N')}] "
+        elif block_name != "":
+            urg = data.get("urgent", "N")
+            if urg == "Y":
+                prefix = "🔥 "
+            elif urg == "A":
+                prefix = "🅰️ "
+            elif urg == "S":
+                prefix = "🪼 "
+            elif urg == "V":
+                prefix = "🚀 "
+            elif urg == "Q":
+                prefix = "⚧️ "
+
+        item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
         item.setForeground(QColor(data.get("color", "#1E293B")))
         item.setData(Qt.UserRole, data)
         item.setFlags(item.flags() | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled | Qt.ItemIsEnabled)
@@ -2133,11 +1916,9 @@ class MainWindow(QMainWindow):
     @pyqtSlot(QListWidgetItem)
     def on_item_double_clicked(self, item):
         data = item.data(Qt.UserRole)
-        if not isinstance(data, dict):
-            return
+        if not isinstance(data, dict): return
 
-        if not data.get("block"):
-            return
+        if not data.get("block"): return
 
         if data.get("block") == "KHO_E":
             self.on_context_menu(self.listboxes["KHO_E"].mapFromGlobal(QCursor.pos()), self.listboxes["KHO_E"])
@@ -2162,7 +1943,20 @@ class MainWindow(QMainWindow):
             else:
                 data["urgent"] = "N"
 
-        item.setText(format_picker_item_text(data))
+        prefix = ""
+        if data.get("block") != "":
+            urg = data.get("urgent", "N")
+            if urg == "Y":
+                prefix = "🔥 "
+            elif urg == "A":
+                prefix = "🅰️ "
+            elif urg == "S":
+                prefix = "🪼 "
+            elif urg == "V":
+                prefix = "🚀 "
+            elif urg == "Q":
+                prefix = "⚧️ "
+        item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
         item.setData(Qt.UserRole, data)
 
         self.current_firebase_data[data["user_id"]] = data
@@ -2174,90 +1968,39 @@ class MainWindow(QMainWindow):
 
     def on_context_menu(self, pos, list_widget):
         item = list_widget.itemAt(pos)
-        if not item:
-            return
+        if not item: return
         data = item.data(Qt.UserRole)
-        if not isinstance(data, dict):
-            return
         menu = QMenu(self)
 
         act_y = act_a = act_s = act_v = act_n = act_q = None
-        act_flow_ibd = act_flow_isw = act_norm_ibd = act_norm_isw = None
         actions_kho_e = {}
-        flow_sdd_actions = {}
-        flow_ahm_actions = {}
-        norm_sdd_actions = {}
-        norm_ahm_actions = {}
 
-        current_block = data.get("block", "")
-
-        if not current_block:
+        if not data.get("block"):
             pass
-        elif current_block == "KHO_E":
+        elif data.get("block") == "KHO_E":
             actions_kho_e["PT_N"] = menu.addAction("📦 Gán Phú Thái Normal")
             actions_kho_e["PT_Q"] = menu.addAction("⚧️ Gán Phú Thái SSAQ")
             actions_kho_e["TV"] = menu.addAction("📦 Gán Tivi")
             actions_kho_e["MGTL"] = menu.addAction("📦 Gán MGTL")
             actions_kho_e["GD"] = menu.addAction("📦 Gán Gia Dụng")
             menu.addSeparator()
-        elif current_block in FLOW_ZONES:
-            act_n = menu.addAction("📦 Gán Flow Thường (Normal)")
+        elif data.get("block") in FLOW_ZONES:
+            act_n = menu.addAction("📦 Gán Flow Thường")
             act_q = menu.addAction("⚧️ Gán Flow SSAQ")
             menu.addSeparator()
-
-            menu_sdd = menu.addMenu("🪼 Gán Flow SDD (COT 1 - 6)")
-            flow_sdd_actions["S1"] = menu_sdd.addAction("🪼 Gán SDD COT 1")
-            flow_sdd_actions["S2"] = menu_sdd.addAction("🪼 Gán SDD COT 2 (Lũy kế COT 1-2)")
-            flow_sdd_actions["S3"] = menu_sdd.addAction("🪼 Gán SDD COT 3 (Lũy kế COT 1-3)")
-            flow_sdd_actions["S4"] = menu_sdd.addAction("🪼 Gán SDD COT 4 (Lũy kế COT 1-4)")
-            flow_sdd_actions["S5"] = menu_sdd.addAction("🪼 Gán SDD COT 5 (Lũy kế COT 1-5)")
-            flow_sdd_actions["S6"] = menu_sdd.addAction("🪼 Gán SDD COT 6 (Lũy kế COT 1-6)")
-
-            menu_ahm = menu.addMenu("🅰️ Gán Flow AHM (COT 1 - 4)")
-            flow_ahm_actions["A1"] = menu_ahm.addAction("🅰️ Gán AHM COT 1")
-            flow_ahm_actions["A2"] = menu_ahm.addAction("🅰️ Gán AHM COT 2 (Lũy kế COT 1-2)")
-            flow_ahm_actions["A3"] = menu_ahm.addAction("🅰️ Gán AHM COT 3 (Lũy kế COT 1-3)")
-            flow_ahm_actions["A4"] = menu_ahm.addAction("🅰️ Gán AHM COT 4 (Lũy kế COT 1-4)")
-            menu.addSeparator()
-
-            act_flow_ibd = menu.addAction("🚚 Gán Flow InTra BD")
-            act_flow_isw = menu.addAction("🚚 Gán Flow InTra SW")
-            menu.addSeparator()
-        else:
-            # Pick Normal
+        elif data.get("block") not in FLOW_ZONES:
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
             menu.addSeparator()
-
-            menu_sdd_norm = menu.addMenu("🪼 Gán Normal SDD (COT 1 - 6)")
-            norm_sdd_actions["S1"] = menu_sdd_norm.addAction("🪼 Gán SDD COT 1")
-            norm_sdd_actions["S2"] = menu_sdd_norm.addAction("🪼 Gán SDD COT 2 (Lũy kế COT 1-2)")
-            norm_sdd_actions["S3"] = menu_sdd_norm.addAction("🪼 Gán SDD COT 3 (Lũy kế COT 1-3)")
-            norm_sdd_actions["S4"] = menu_sdd_norm.addAction("🪼 Gán SDD COT 4 (Lũy kế COT 1-4)")
-            norm_sdd_actions["S5"] = menu_sdd_norm.addAction("🪼 Gán SDD COT 5 (Lũy kế COT 1-5)")
-            norm_sdd_actions["S6"] = menu_sdd_norm.addAction("🪼 Gán SDD COT 6 (Lũy kế COT 1-6)")
-
-            menu_ahm_norm = menu.addMenu("🅰️ Gán Normal AHM (COT 1 - 4)")
-            norm_ahm_actions["A1"] = menu_ahm_norm.addAction("🅰️ Gán AHM COT 1")
-            norm_ahm_actions["A2"] = menu_ahm_norm.addAction("🅰️ Gán AHM COT 2 (Lũy kế COT 1-2)")
-            norm_ahm_actions["A3"] = menu_ahm_norm.addAction("🅰️ Gán AHM COT 3 (Lũy kế COT 1-3)")
-            norm_ahm_actions["A4"] = menu_ahm_norm.addAction("🅰️ Gán AHM COT 4 (Lũy kế COT 1-4)")
-            menu.addSeparator()
-
-            act_norm_ibd = menu.addAction("🚚 Gán Normal InTra BD")
-            act_norm_isw = menu.addAction("🚚 Gán Normal InTra SW")
-            menu.addSeparator()
-
             act_y = menu.addAction("🔥 Gán Tất Cả Express")
             act_a = menu.addAction("🅰️ Gán Tất Cả AHM")
             act_s = menu.addAction("🪼 Gán SDD")
             act_v = menu.addAction("🚀 Gán NDD (50057)")
-            menu.addSeparator()
 
+        menu.addSeparator()
         act_del = menu.addAction("❌ Xóa nhân sự")
 
         action = menu.exec_(list_widget.mapToGlobal(pos))
-        if not action:
-            return
+        if not action: return
 
         if action == act_del:
             self.start_thread(FirebaseUpdateThread("DELETE", user_id=data["user_id"]))
@@ -2270,7 +2013,7 @@ class MainWindow(QMainWindow):
             self.start_thread(wms_thread)
             self.trigger_search_update()
 
-        elif current_block == "KHO_E" and action in actions_kho_e.values():
+        elif data.get("block") == "KHO_E" and action in actions_kho_e.values():
             if action == actions_kho_e["PT_N"]:
                 data["kho_e_group"], data["urgent"], data["kho_e_label"] = "VNVLFPOG0211", "N", "PT-N"
             elif action == actions_kho_e["PT_Q"]:
@@ -2282,122 +2025,9 @@ class MainWindow(QMainWindow):
             elif action == actions_kho_e["GD"]:
                 data["kho_e_group"], data["urgent"], data["kho_e_label"] = "VNVLFPOG0222", "N", "GD"
 
-            item.setText(format_picker_item_text(data))
+            item.setText(f'[{data["kho_e_label"]}] {data.get("name", "N/A")} - {data.get("wms_id", "")}')
             item.setData(Qt.UserRole, data)
 
-            self.current_firebase_data[data["user_id"]] = data
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        elif current_block in FLOW_ZONES and action in flow_sdd_actions.values():
-            for code, act_obj in flow_sdd_actions.items():
-                if action == act_obj:
-                    data["urgent"] = code
-                    break
-            item.setText(format_picker_item_text(data))
-            item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        elif current_block in FLOW_ZONES and action in flow_ahm_actions.values():
-            for code, act_obj in flow_ahm_actions.items():
-                if action == act_obj:
-                    data["urgent"] = code
-                    break
-            item.setText(format_picker_item_text(data))
-            item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        elif action == act_flow_ibd:
-            data["urgent"] = "IBD"
-            item.setText(format_picker_item_text(data))
-            item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        elif action == act_flow_isw:
-            data["urgent"] = "ISW"
-            item.setText(format_picker_item_text(data))
-            item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        # Pick Normal COT / InTra actions
-        elif current_block in NORMAL_BLOCKS and action in norm_sdd_actions.values():
-            for code, act_obj in norm_sdd_actions.items():
-                if action == act_obj:
-                    data["urgent"] = code
-                    break
-            item.setText(format_picker_item_text(data))
-            item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        elif current_block in NORMAL_BLOCKS and action in norm_ahm_actions.values():
-            for code, act_obj in norm_ahm_actions.items():
-                if action == act_obj:
-                    data["urgent"] = code
-                    break
-            item.setText(format_picker_item_text(data))
-            item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        elif action == act_norm_ibd:
-            data["urgent"] = "IBD"
-            item.setText(format_picker_item_text(data))
-            item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        elif action == act_norm_isw:
-            data["urgent"] = "ISW"
-            item.setText(format_picker_item_text(data))
-            item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        elif action == act_q:
-            data["urgent"] = "Q"
-            item.setText(format_picker_item_text(data))
-            item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
-            self.start_thread(FirebaseUpdateThread("PUT", data=data))
-            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
-            self.start_thread(wms_thread)
-            self.trigger_search_update()
-
-        elif action == act_n:
-            data["urgent"] = "N"
-            item.setText(format_picker_item_text(data))
-            item.setData(Qt.UserRole, data)
             self.current_firebase_data[data["user_id"]] = data
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
@@ -2406,9 +2036,8 @@ class MainWindow(QMainWindow):
 
         elif act_y and action == act_y:
             data["urgent"] = "Y"
-            item.setText(format_picker_item_text(data))
+            item.setText(f'🔥 {data.get("name", "N/A")} - {data.get("wms_id", "")}')
             item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
@@ -2416,9 +2045,8 @@ class MainWindow(QMainWindow):
 
         elif act_a and action == act_a:
             data["urgent"] = "A"
-            item.setText(format_picker_item_text(data))
+            item.setText(f'🅰️ {data.get("name", "N/A")} - {data.get("wms_id", "")}')
             item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
@@ -2426,9 +2054,8 @@ class MainWindow(QMainWindow):
 
         elif act_s and action == act_s:
             data["urgent"] = "S"
-            item.setText(format_picker_item_text(data))
+            item.setText(f'🪼 {data.get("name", "N/A")} - {data.get("wms_id", "")}')
             item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
@@ -2436,9 +2063,26 @@ class MainWindow(QMainWindow):
 
         elif act_v and action == act_v:
             data["urgent"] = "V"
-            item.setText(format_picker_item_text(data))
+            item.setText(f'🚀 {data.get("name", "N/A")} - {data.get("wms_id", "")}')
             item.setData(Qt.UserRole, data)
-            self.current_firebase_data[data["user_id"]] = data
+            self.start_thread(FirebaseUpdateThread("PUT", data=data))
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
+            self.trigger_search_update()
+
+        elif act_q and action == act_q:
+            data["urgent"] = "Q"
+            item.setText(f'⚧️ {data.get("name", "N/A")} - {data.get("wms_id", "")}')
+            item.setData(Qt.UserRole, data)
+            self.start_thread(FirebaseUpdateThread("PUT", data=data))
+            wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
+            self.start_thread(wms_thread)
+            self.trigger_search_update()
+
+        elif act_n and action == act_n:
+            data["urgent"] = "N"
+            item.setText(f'{data.get("name", "N/A")} - {data.get("wms_id", "")}')
+            item.setData(Qt.UserRole, data)
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
@@ -2456,11 +2100,10 @@ class MainWindow(QMainWindow):
         self.update_all_badges()
 
         if deleted_pickers:
-            for p in deleted_pickers:
-                p["urgent"] = "N"
+            for p in deleted_pickers: p["urgent"] = "N"
             wms_thread = WMSUpdateRuleThread("", deleted_pickers, self.get_current_config(), self.wms_cookie)
             self.start_thread(wms_thread)
-            self.trigger_search_update()
+        self.trigger_search_update()
 
     def refresh_all_data(self):
         self.lbl_status.setText("🔄 Đang đồng bộ dữ liệu Picker và Config...")
@@ -2498,7 +2141,8 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(dict)
     def on_flow_tasks_fetched(self, counts):
-        self.flow_task_counts = counts.get("flow_data", {})
+        self.flow_task_counts = counts.get("normal", {})
+        self.flow_ssaq_counts = counts.get("ssaq", {})
         self.kho_e_task_counts = counts.get("kho_e", {})
         self.update_all_badges()
 
@@ -2508,10 +2152,8 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(100)
 
         def _parse_bool(val):
-            if isinstance(val, bool):
-                return val
-            if isinstance(val, str):
-                return val.lower() == 'true'
+            if isinstance(val, bool): return val
+            if isinstance(val, str): return val.lower() == 'true'
             return bool(val)
 
         if config_dict is not None:
@@ -2541,10 +2183,12 @@ class MainWindow(QMainWindow):
             self.btn_shift_toggle.setChecked(is_day_shift)
             if is_day_shift:
                 self.btn_shift_toggle.setText("☀️ Ca Ngày")
-                self.btn_shift_toggle.setStyleSheet("background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+                self.btn_shift_toggle.setStyleSheet(
+                    "background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
             else:
                 self.btn_shift_toggle.setText("🌙 Ca Đêm")
-                self.btn_shift_toggle.setStyleSheet("background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
+                self.btn_shift_toggle.setStyleSheet(
+                    "background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
             self.btn_shift_toggle.blockSignals(False)
 
             self.toggle_sdd.setChecked(is_sdd)
@@ -2579,8 +2223,7 @@ class MainWindow(QMainWindow):
             self.refresh_wms_tasks()
             return
 
-        for lb in self.listboxes.values():
-            lb.clear()
+        for lb in self.listboxes.values(): lb.clear()
         self.current_firebase_data = {}
 
         if not pickers_dict:
@@ -2596,17 +2239,34 @@ class MainWindow(QMainWindow):
                 v["user_id"] = str(k)
                 self.current_firebase_data[str(k)] = v
 
-                block_name = str(v.get("block", "")).strip()
-                fallback_lb = self.listboxes.get("", list(self.listboxes.values())[0])
-                target_lb = self.listboxes.get(block_name, fallback_lb)
+            block_name = str(v.get("block", "")).strip()
+            fallback_lb = self.listboxes.get("", list(self.listboxes.values())[0])
+            target_lb = self.listboxes.get(block_name, fallback_lb)
 
-                item = QListWidgetItem("")
-                item.setText(format_picker_item_text(v))
-                item.setForeground(QColor(v.get("color", "#1E293B")))
-                item.setFlags(item.flags() | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled | Qt.ItemIsEnabled)
-                item.setData(Qt.UserRole, v)
+            item = QListWidgetItem("")
 
-                target_lb.addItem(item)
+            prefix = ""
+            if block_name == "KHO_E":
+                prefix = f"[{v.get('kho_e_label', 'PT-N')}] "
+            elif block_name != "":
+                urg = v.get("urgent", "N")
+                if urg == "Y":
+                    prefix = "🔥 "
+                elif urg == "A":
+                    prefix = "🅰️ "
+                elif urg == "S":
+                    prefix = "🪼 "
+                elif urg == "V":
+                    prefix = "🚀 "
+                elif urg == "Q":
+                    prefix = "⚧️ "
+
+            item.setText(f'{prefix}{v.get("name", "N/A")} - {v.get("wms_id", "")}')
+            item.setForeground(QColor(v.get("color", "#1E293B")))
+            item.setFlags(item.flags() | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled | Qt.ItemIsEnabled)
+            item.setData(Qt.UserRole, v)
+
+            target_lb.addItem(item)
 
         self.update_all_badges()
         self.lbl_status.setText("✅ Đã đồng bộ Firebase thành công!")
@@ -2636,6 +2296,7 @@ class MainWindow(QMainWindow):
             config_data = self.get_current_config()
             self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
             self.refresh_wms_tasks()
+
 
 if __name__ == "__main__":
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
