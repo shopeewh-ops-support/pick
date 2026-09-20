@@ -30,7 +30,7 @@ WAVE_RULE_GROUPS = {
 }
 
 # --- CONSTANTS ---
-FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "B5", "HV", "FD", "C1", "C2", "C3", "KHO_E", "TOP"]
+FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "B5", "HV", "FD", "C1", "C2", "C3", "C4", "KHO_E", "TOP"]
 NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block E", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
@@ -1444,9 +1444,10 @@ class MainWindow(QMainWindow):
         self.create_zone_box(flow_grid, "C1", flow_color_c, 1, 2, True, watermark_text="C1")
         self.create_zone_box(flow_grid, "C2", flow_color_c, 1, 3, True, watermark_text="C2")
         self.create_zone_box(flow_grid, "C3", flow_color_c, 1, 4, True, watermark_text="C3")
+        self.create_zone_box(flow_grid, "C4", flow_color_c, 1, 5, True, watermark_text="C4")
 
-        self.create_zone_box(flow_grid, "KHO_E", flow_color_d, 1, 6, is_grid=True, colspan=3, watermark_text="KHO E")
-        self.create_zone_box(flow_grid, "TOP", flow_color_d, 1, 5, True, watermark_text="TOP")
+        self.create_zone_box(flow_grid, "KHO_E", flow_color_d, 1, 7, is_grid=True, colspan=2, watermark_text="KHO E")
+        self.create_zone_box(flow_grid, "TOP", flow_color_d, 1, 6, True, watermark_text="TOP")
 
         flow_layout_main.addLayout(flow_grid)
         self.stacked_widget.addWidget(flow_container)
@@ -2306,4 +2307,3 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
-
