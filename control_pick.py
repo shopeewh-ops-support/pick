@@ -1263,54 +1263,26 @@ class MainWindow(QMainWindow):
         normal_grid = QGridLayout()
         normal_grid.setSpacing(int(6 * self.scale))
 
-        # --- Cụm Block A Tối Ưu (Chia 3 ô lồng nhau) ---
-        a_cluster_widget = QWidget()
-        a_cluster_layout = QVBoxLayout(a_cluster_widget)
-        a_cluster_layout.setContentsMargins(0, 0, 0, 0)
-        a_cluster_layout.setSpacing(int(4 * self.scale))
+        # Hàng 0: 6 ô đơn (Toàn bộ phân khu đơn của Block A và Block B)
+        self.create_zone_box(normal_grid, "Block A", "#10B981", 0, 0, True, watermark_text="A")
+        self.create_zone_box(normal_grid, "Block A 1-2", "#059669", 0, 1, True, watermark_text="A1-2")
+        self.create_zone_box(normal_grid, "Block A 3-4", "#047857", 0, 2, True, watermark_text="A3-4")
+        self.create_zone_box(normal_grid, "Block B", "#F59E0B", 0, 3, True, watermark_text="B")
+        self.create_zone_box(normal_grid, "Block B2", "#D97706", 0, 4, True, watermark_text="B2")
+        self.create_zone_box(normal_grid, "Block B4", "#B45309", 0, 5, True, watermark_text="B4")
 
-        self.create_zone_box(a_cluster_layout, "Block A", "#10B981", 0, 0, is_grid=False, watermark_text="A")
+        # Hàng 1: 5 ô (Block A&B&C chiếm 2 cột cuối -> tổng 6 cột cân xứng)
+        self.create_zone_box(normal_grid, "Block C", "#8B5CF6", 1, 0, True, watermark_text="C")
+        self.create_zone_box(normal_grid, "Block E", "#EC4899", 1, 1, True, watermark_text="E")
+        self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 1, 2, True, watermark_text="AB")
+        self.create_zone_box(normal_grid, "Block B&C", "#3B82F6", 1, 3, True, watermark_text="BC")
+        self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 4, is_grid=True, colspan=2, watermark_text="ABC")
 
-        sub_a_layout = QHBoxLayout()
-        sub_a_layout.setContentsMargins(0, 0, 0, 0)
-        sub_a_layout.setSpacing(int(4 * self.scale))
-        self.create_zone_box(sub_a_layout, "Block A 1-2", "#059669", 0, 0, is_grid=False, watermark_text="A1-2")
-        self.create_zone_box(sub_a_layout, "Block A 3-4", "#047857", 0, 0, is_grid=False, watermark_text="A3-4")
-        a_cluster_layout.addLayout(sub_a_layout)
-
-        a_cluster_layout.setStretch(0, 1)
-        a_cluster_layout.setStretch(1, 1)
-
-        normal_grid.addWidget(a_cluster_widget, 0, 0)
-
-        # --- Cụm Block B Tối Ưu (Chia 3 ô lồng nhau: B tổng, B2, B4) ---
-        b_cluster_widget = QWidget()
-        b_cluster_layout = QVBoxLayout(b_cluster_widget)
-        b_cluster_layout.setContentsMargins(0, 0, 0, 0)
-        b_cluster_layout.setSpacing(int(4 * self.scale))
-
-        self.create_zone_box(b_cluster_layout, "Block B", "#F59E0B", 0, 0, is_grid=False, watermark_text="B")
-
-        sub_b_layout = QHBoxLayout()
-        sub_b_layout.setContentsMargins(0, 0, 0, 0)
-        sub_b_layout.setSpacing(int(4 * self.scale))
-        self.create_zone_box(sub_b_layout, "Block B2", "#D97706", 0, 0, is_grid=False, watermark_text="B2")
-        self.create_zone_box(sub_b_layout, "Block B4", "#B45309", 0, 0, is_grid=False, watermark_text="B4")
-        b_cluster_layout.addLayout(sub_b_layout)
-
-        b_cluster_layout.setStretch(0, 1)
-        b_cluster_layout.setStretch(1, 1)
-
-        normal_grid.addWidget(b_cluster_widget, 0, 1)
-
-        # Hàng 0: Block A (Cluster), Block B (Cluster), Block C, Block E
-        self.create_zone_box(normal_grid, "Block C", "#8B5CF6", 0, 2, True, watermark_text="C")
-        self.create_zone_box(normal_grid, "Block E", "#EC4899", 0, 3, True, watermark_text="E")
-
-        # Hàng 1: Block A&B, Block B&C, Block A&B&C (chiếm 2 cột cân đối)
-        self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 1, 0, True, watermark_text="AB")
-        self.create_zone_box(normal_grid, "Block B&C", "#3B82F6", 1, 1, True, watermark_text="BC")
-        self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 2, is_grid=True, colspan=2, watermark_text="ABC")
+        # Thiết lập độ giãn đều cho 2 hàng và 6 cột
+        normal_grid.setRowStretch(0, 1)
+        normal_grid.setRowStretch(1, 1)
+        for c in range(6):
+            normal_grid.setColumnStretch(c, 1)
 
         normal_layout_main.addLayout(normal_grid)
         self.stacked_widget.addWidget(normal_container)
