@@ -35,7 +35,7 @@ NORMAL_BLOCKS = [
     "Block A", "Block A 1-2", "Block A 3-4",
     "Block B", "Block B2", "Block B4",
     "Block C", "Block E",
-    "Block A&B", "Block B&C", "Block A&B&C"
+    "Block A&B", "Block B&C", "Block A&B&C", "Block A&B&C&E"
 ]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
@@ -234,12 +234,19 @@ class WMSUpdateRuleThread(QThread):
                 print(f"[DEBUG][Skill Update] Lỗi API Request: {e}")
 
         skills_to_set = []
+        is_abce = self.target_zone in ["Block A&B&C&E", "Block ABCE"]
+        is_flow_zone = self.target_zone in FLOW_ZONES
+
         for p in self.picker_list:
             wms_id = p.get("wms_id")
             if not wms_id or not str(wms_id).isdigit():
                 continue
-            is_flow_zone = self.target_zone in FLOW_ZONES
-            target_rule = "Pick0025" if (is_flow_zone and p.get("urgent") == "Q") else "Pick0024"
+            if is_abce:
+                target_rule = "Pick0021"
+            elif is_flow_zone and p.get("urgent") == "Q":
+                target_rule = "Pick0025"
+            else:
+                target_rule = "Pick0024"
             skills_to_set.append((wms_id, target_rule))
 
         if skills_to_set:
@@ -313,11 +320,22 @@ class WMSUpdateRuleThread(QThread):
                 normal_zones.update(ZONE_CFG_B | ZONE_CFG_C)
             elif self.target_zone == "Block A&B&C":
                 normal_zones.update(ZONE_CFG_A | ZONE_CFG_B | ZONE_CFG_C)
+            elif self.target_zone in ["Block A&B&C&E", "Block ABCE"]:
+                normal_zones.update(ZONE_CFG_A | ZONE_CFG_B | ZONE_CFG_C | ZONE_CFG_E)
+
+        dynamic_wave_map = {
+            "Block A&B": [1031, 1791, 2610, 2633, 2937, 2986],
+            "Block B&C": [1033, 1793, 2612, 2635, 2939, 2988],
+            "Block A&B&C": [1032, 1794, 1792, 2611, 2613, 2634, 2636, 2738, 2940, 2938, 2987, 2989],
+            "Block A&B&C&E": [3261],
+            "Block ABCE": [3261]
+        }
+        dynamic_wave_ids = dynamic_wave_map.get(self.target_zone, [-1])
 
         def do_post(staff_ids, zone_ids, flow_work_zones, channel_ids, group_ids, role_name=""):
             if not staff_ids: return
             payload = {
-                "checkbox_bit_set": 29,
+                "checkbox_bit_set": 61,
                 "zone_hard_restrict": 1,
                 "zone_hard_restrict_apply_urgent": 1,
                 "channel_hard_restrict": 1,
@@ -332,7 +350,8 @@ class WMSUpdateRuleThread(QThread):
                 "zone_id_list": zone_ids,
                 "flow_pick_working_zone_list": flow_work_zones,
                 "channel_id_list": channel_ids,
-                "flow_pick_order_group_id_list": group_ids
+                "flow_pick_order_group_id_list": group_ids,
+                "dynamic_wave_order_group_id_list": dynamic_wave_ids
             }
             try:
                 requests.post(url_mass_adjust, json=payload, headers=headers, timeout=10)
@@ -465,8 +484,9 @@ class FetchTasksThread(QThread):
                 has_c = bool(t_zones & ZONE_CFG_C)
                 has_e = bool(t_zones & ZONE_CFG_E)
 
-                # Nhập logic A&C vào chung Block A&B&C
-                if (has_a and has_b and has_c) or (has_a and has_c):
+                if has_e and (has_a or has_b or has_c):
+                    counts["Block A&B&C&E"][task_type] += 1
+                elif (has_a and has_b and has_c) or (has_a and has_c):
                     counts["Block A&B&C"][task_type] += 1
                 elif has_a and has_b:
                     counts["Block A&B"][task_type] += 1
@@ -595,8 +615,9 @@ class FetchDynamicTasksThread(QThread):
                         else:
                             counts[block_key][task_type] += 1
 
-                    # Nhập logic A&C vào chung Block A&B&C
-                    if (has_a and has_b and has_c) or (has_a and has_c):
+                    if has_e and (has_a or has_b or has_c):
+                        record_task("Block A&B&C&E")
+                    elif (has_a and has_b and has_c) or (has_a and has_c):
                         record_task("Block A&B&C")
                     elif has_a and has_b:
                         record_task("Block A&B")
@@ -990,7 +1011,7 @@ class ZoneListWidget(QListWidget):
         painter.setRenderHint(QPainter.Antialiasing)
 
         font_size = max(40, int(80 * self.scale))
-        if len(self.watermark_text) > 4:
+        if len(self.watermark_text) >= 4:
             font_size = max(24, int(45 * self.scale))
 
         font = QFont("Segoe UI", font_size, QFont.Bold)
@@ -1271,12 +1292,13 @@ class MainWindow(QMainWindow):
         self.create_zone_box(normal_grid, "Block B2", "#D97706", 0, 4, True, watermark_text="B2")
         self.create_zone_box(normal_grid, "Block B4", "#B45309", 0, 5, True, watermark_text="B4")
 
-        # Hàng 1: 5 ô (Block A&B&C chiếm 2 cột cuối -> tổng 6 cột cân xứng)
+        # Hàng 1: 6 ô (C, E, A&B, B&C, A&B&C, A&B&C&E -> Lưới 2x6 cân xứng hoàn hảo)
         self.create_zone_box(normal_grid, "Block C", "#8B5CF6", 1, 0, True, watermark_text="C")
         self.create_zone_box(normal_grid, "Block E", "#EC4899", 1, 1, True, watermark_text="E")
         self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 1, 2, True, watermark_text="AB")
         self.create_zone_box(normal_grid, "Block B&C", "#3B82F6", 1, 3, True, watermark_text="BC")
-        self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 4, is_grid=True, colspan=2, watermark_text="ABC")
+        self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 4, True, watermark_text="ABC")
+        self.create_zone_box(normal_grid, "Block A&B&C&E", "#9333EA", 1, 5, True, watermark_text="ABCE")
 
         # Thiết lập độ giãn đều cho 2 hàng và 6 cột
         normal_grid.setRowStretch(0, 1)
