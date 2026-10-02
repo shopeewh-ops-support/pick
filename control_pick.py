@@ -16,22 +16,27 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QRunnable, QThreadPool, pyqtSlot, QRect
 from PyQt5.QtGui import QFont, QColor, QKeySequence, QPainter, QCursor
 
-# =========================================================================
-# WAVE RULE GROUPS
-# =========================================================================
-WAVE_RULE_GROUPS = {
-    "SDD": ["VNVLDWR0200", "VNVLDWR0213", "VNVLDWR0214"],
-    "AHM": ["VNVLDWR0215", "VNVLDWR0216", "VNVLDWR0217"],
-    "D-S NDD normal": ["VNVLDWR0157"],
-    "D-S NDD Phú Thái": ["VNVLDWR0194"],
-    "N-S NDD normal": ["VNVLDWR0226"],
-    "N-S NDD Phú Thái": ["VNVLDWR0227"],
-    "D-": ["VNVLDWR0196", "VNVLDWR0195"]
-}
-
 # --- CONSTANTS ---
 FLOW_ZONES = ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "B5", "HV", "FD", "C1", "C2", "C3", "C4", "KHO_E", "TOP"]
-NORMAL_BLOCKS = ["Block A", "Block B", "Block C", "Block E", "Block A&B", "Block A&C", "Block B&C", "Block A&B&C"]
+
+# Danh sách Zone cố định
+ZONE_CFG_A = {"A1", "A2", "A3", "A4"}
+ZONE_CFG_A12 = {"A1", "A2"}
+ZONE_CFG_A34 = {"A3", "A4"}
+
+ZONE_CFG_B = {"B1", "B2", "B3", "B4", "B5", "HV", "FD"}
+ZONE_CFG_B2 = {"B2"}
+ZONE_CFG_B4 = {"B4"}
+
+ZONE_CFG_C = {"C1", "C2", "C3", "C4"}
+ZONE_CFG_E = {"E1", "E2", "E3", "E4", "TOP", "REP", "FDS"}
+
+NORMAL_BLOCKS = [
+    "Block A", "Block A 1-2", "Block A 3-4",
+    "Block B", "Block B2", "Block B4",
+    "Block C", "Block E",
+    "Block A&B", "Block B&C", "Block A&B&C"
+]
 
 FIREBASE_PICKER_URL = "https://ship-8a347-default-rtdb.firebaseio.com/pickers"
 FIREBASE_CONFIG_URL = "https://ship-8a347-default-rtdb.firebaseio.com/config"
@@ -184,88 +189,6 @@ def log_uncaught_exceptions(ex_cls, ex, tb):
 sys.excepthook = log_uncaught_exceptions
 
 
-class ToggleSwitch(QPushButton):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setCheckable(True)
-        self.setMinimumSize(44, 24)
-        self.setMaximumSize(44, 24)
-        self.setCursor(Qt.PointingHandCursor)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(Qt.NoPen)
-
-        rect = QRect(0, 0, self.width(), self.height())
-        if self.isChecked():
-            painter.setBrush(QColor("#4ADE80"))
-        else:
-            painter.setBrush(QColor("#E2E8F0"))
-
-        painter.drawRoundedRect(0, 0, rect.width(), rect.height(), 12, 12)
-
-        painter.setBrush(QColor("#FFFFFF"))
-        if self.isChecked():
-            painter.drawEllipse(self.width() - 22, 2, 20, 20)
-        else:
-            painter.drawEllipse(2, 2, 20, 20)
-        painter.end()
-
-
-class WMSUpdateWaveRuleThread(QThread):
-    finished_update = pyqtSignal(int, int)
-
-    def __init__(self, wms_cookie, rules_to_update):
-        super().__init__()
-        self.wms_cookie = wms_cookie
-        self.rules_to_update = rules_to_update
-
-    def run(self):
-        if not self.wms_cookie or not self.rules_to_update:
-            self.finished_update.emit(0, 0)
-            return
-
-        headers = {
-            "Sec-CH-UA": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
-            "Sec-CH-UA-Mobile": "?0",
-            "Sec-CH-UA-Platform": '"Windows"',
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-            "Content-Type": "application/json",
-            "Cookie": self.wms_cookie
-        }
-        url = "https://wms.ssc.shopee.vn/api/v2/apps/config/waverule/set_dynamic_wave_rule_switch"
-
-        success_count = 0
-        total_count = len(self.rules_to_update)
-
-        def send_req(rule_id, status):
-            payload = {
-                "rule_id": rule_id,
-                "switch_status": status
-            }
-            try:
-                res = requests.post(url, json=payload, headers=headers, timeout=10)
-                if res.status_code == 200:
-                    data = res.json()
-                    if data.get("retcode") == 0 and data.get("message") == "success":
-                        return True
-            except Exception as e:
-                print(f"[WMS Wave Rule] Lỗi API Request ({rule_id}): {e}")
-            return False
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, total_count)) as executor:
-            futures = [executor.submit(send_req, rule_id, status) for rule_id, status in self.rules_to_update.items()]
-            for future in concurrent.futures.as_completed(futures):
-                if future.result():
-                    success_count += 1
-
-        self.finished_update.emit(success_count, total_count)
-
-
 class WMSUpdateRuleThread(QThread):
     def __init__(self, target_zone, picker_list, config_data, wms_cookie):
         super().__init__()
@@ -368,27 +291,28 @@ class WMSUpdateRuleThread(QThread):
 
         normal_zones = set()
         if not is_flow and not is_none:
-            cfg_a = [z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()]
-            cfg_b = [z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()]
-            cfg_c = [z.strip() for z in self.config_data.get("Block C", "").split(",") if z.strip()]
-            cfg_e = [z.strip() for z in self.config_data.get("Block E", "").split(",") if z.strip()]
-
             if self.target_zone == "Block A":
-                normal_zones.update(cfg_a)
+                normal_zones.update(ZONE_CFG_A)
+            elif self.target_zone == "Block A 1-2":
+                normal_zones.update(ZONE_CFG_A12)
+            elif self.target_zone == "Block A 3-4":
+                normal_zones.update(ZONE_CFG_A34)
             elif self.target_zone == "Block B":
-                normal_zones.update(cfg_b)
+                normal_zones.update(ZONE_CFG_B)
+            elif self.target_zone == "Block B2":
+                normal_zones.update(ZONE_CFG_B2)
+            elif self.target_zone == "Block B4":
+                normal_zones.update(ZONE_CFG_B4)
             elif self.target_zone == "Block C":
-                normal_zones.update(cfg_c)
+                normal_zones.update(ZONE_CFG_C)
             elif self.target_zone == "Block E":
-                normal_zones.update(cfg_e)
+                normal_zones.update(ZONE_CFG_E)
             elif self.target_zone == "Block A&B":
-                normal_zones.update(cfg_a + cfg_b)
-            elif self.target_zone == "Block A&C":
-                normal_zones.update(cfg_a + cfg_c)
+                normal_zones.update(ZONE_CFG_A | ZONE_CFG_B)
             elif self.target_zone == "Block B&C":
-                normal_zones.update(cfg_b + cfg_c)
+                normal_zones.update(ZONE_CFG_B | ZONE_CFG_C)
             elif self.target_zone == "Block A&B&C":
-                normal_zones.update(cfg_a + cfg_b + cfg_c)
+                normal_zones.update(ZONE_CFG_A | ZONE_CFG_B | ZONE_CFG_C)
 
         def do_post(staff_ids, zone_ids, flow_work_zones, channel_ids, group_ids, role_name=""):
             if not staff_ids: return
@@ -454,11 +378,6 @@ class FetchTasksThread(QThread):
             return
 
         counts = {block: {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0} for block in NORMAL_BLOCKS}
-
-        cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
-        cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
-        cfg_c = set([z.strip() for z in self.config_data.get("Block C", "").split(",") if z.strip()])
-        cfg_e = set([z.strip() for z in self.config_data.get("Block E", "").split(",") if z.strip()])
 
         is_day_shift = self.config_data.get("DayShift", True)
 
@@ -541,23 +460,39 @@ class FetchTasksThread(QThread):
                 z_str = task.get("zone_list", "")
                 t_zones = set([z.strip() for z in z_str.split(",") if z.strip()])
 
-                has_a = bool(t_zones & cfg_a)
-                has_b = bool(t_zones & cfg_b)
-                has_c = bool(t_zones & cfg_c)
-                has_e = bool(t_zones & cfg_e)
+                has_a = bool(t_zones & ZONE_CFG_A)
+                has_b = bool(t_zones & ZONE_CFG_B)
+                has_c = bool(t_zones & ZONE_CFG_C)
+                has_e = bool(t_zones & ZONE_CFG_E)
 
-                if has_a and has_b and has_c:
+                # Nhập logic A&C vào chung Block A&B&C
+                if (has_a and has_b and has_c) or (has_a and has_c):
                     counts["Block A&B&C"][task_type] += 1
                 elif has_a and has_b:
                     counts["Block A&B"][task_type] += 1
-                elif has_a and has_c:
-                    counts["Block A&C"][task_type] += 1
                 elif has_b and has_c:
                     counts["Block B&C"][task_type] += 1
                 elif has_a:
-                    counts["Block A"][task_type] += 1
+                    in_a12 = bool(t_zones & ZONE_CFG_A12)
+                    in_a34 = bool(t_zones & ZONE_CFG_A34)
+                    if in_a12 and in_a34:
+                        counts["Block A"][task_type] += 1
+                    elif in_a12:
+                        counts["Block A 1-2"][task_type] += 1
+                    elif in_a34:
+                        counts["Block A 3-4"][task_type] += 1
+                    else:
+                        counts["Block A"][task_type] += 1
                 elif has_b:
-                    counts["Block B"][task_type] += 1
+                    in_b2 = bool(t_zones & ZONE_CFG_B2)
+                    in_b4 = bool(t_zones & ZONE_CFG_B4)
+                    other_b = bool(t_zones & (ZONE_CFG_B - ZONE_CFG_B2 - ZONE_CFG_B4))
+                    if in_b2 and not in_b4 and not other_b:
+                        counts["Block B2"][task_type] += 1
+                    elif in_b4 and not in_b2 and not other_b:
+                        counts["Block B4"][task_type] += 1
+                    else:
+                        counts["Block B"][task_type] += 1
                 elif has_c:
                     counts["Block C"][task_type] += 1
                 elif has_e:
@@ -583,11 +518,6 @@ class FetchDynamicTasksThread(QThread):
             return
 
         counts = {block: {"normal": set(), "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0} for block in NORMAL_BLOCKS}
-
-        cfg_a = set([z.strip() for z in self.config_data.get("Block A", "").split(",") if z.strip()])
-        cfg_b = set([z.strip() for z in self.config_data.get("Block B", "").split(",") if z.strip()])
-        cfg_c = set([z.strip() for z in self.config_data.get("Block C", "").split(",") if z.strip()])
-        cfg_e = set([z.strip() for z in self.config_data.get("Block E", "").split(",") if z.strip()])
 
         is_day_shift = self.config_data.get("DayShift", True)
 
@@ -654,10 +584,10 @@ class FetchDynamicTasksThread(QThread):
                     z_str = task.get("zone_list", "")
                     t_zones = set([z.strip() for z in z_str.split(",") if z.strip()])
 
-                    has_a = bool(t_zones & cfg_a)
-                    has_b = bool(t_zones & cfg_b)
-                    has_c = bool(t_zones & cfg_c)
-                    has_e = bool(t_zones & cfg_e)
+                    has_a = bool(t_zones & ZONE_CFG_A)
+                    has_b = bool(t_zones & ZONE_CFG_B)
+                    has_c = bool(t_zones & ZONE_CFG_C)
+                    has_e = bool(t_zones & ZONE_CFG_E)
 
                     def record_task(block_key):
                         if task_type == "normal":
@@ -665,18 +595,34 @@ class FetchDynamicTasksThread(QThread):
                         else:
                             counts[block_key][task_type] += 1
 
-                    if has_a and has_b and has_c:
+                    # Nhập logic A&C vào chung Block A&B&C
+                    if (has_a and has_b and has_c) or (has_a and has_c):
                         record_task("Block A&B&C")
                     elif has_a and has_b:
                         record_task("Block A&B")
-                    elif has_a and has_c:
-                        record_task("Block A&C")
                     elif has_b and has_c:
                         record_task("Block B&C")
                     elif has_a:
-                        record_task("Block A")
+                        in_a12 = bool(t_zones & ZONE_CFG_A12)
+                        in_a34 = bool(t_zones & ZONE_CFG_A34)
+                        if in_a12 and in_a34:
+                            record_task("Block A")
+                        elif in_a12:
+                            record_task("Block A 1-2")
+                        elif in_a34:
+                            record_task("Block A 3-4")
+                        else:
+                            record_task("Block A")
                     elif has_b:
-                        record_task("Block B")
+                        in_b2 = bool(t_zones & ZONE_CFG_B2)
+                        in_b4 = bool(t_zones & ZONE_CFG_B4)
+                        other_b = bool(t_zones & (ZONE_CFG_B - ZONE_CFG_B2 - ZONE_CFG_B4))
+                        if in_b2 and not in_b4 and not other_b:
+                            record_task("Block B2")
+                        elif in_b4 and not in_b2 and not other_b:
+                            record_task("Block B4")
+                        else:
+                            record_task("Block B")
                     elif has_c:
                         record_task("Block C")
                     elif has_e:
@@ -1043,9 +989,9 @@ class ZoneListWidget(QListWidget):
         painter = QPainter(self.viewport())
         painter.setRenderHint(QPainter.Antialiasing)
 
-        font_size = max(50, int(100 * self.scale))
-        if len(self.watermark_text) > 5:
-            font_size = max(30, int(60 * self.scale))
+        font_size = max(40, int(80 * self.scale))
+        if len(self.watermark_text) > 4:
+            font_size = max(24, int(45 * self.scale))
 
         font = QFont("Segoe UI", font_size, QFont.Bold)
         painter.setFont(font)
@@ -1155,14 +1101,9 @@ class MainWindow(QMainWindow):
 
         self.badges = {}
 
-        self.current_toggle_states = {
-            "SDD": False,
-            "AHM": False,
-            "D-S NDD normal": False,
-            "D-S NDD Phú Thái": False,
-            "N-S NDD normal": False,
-            "N-S NDD Phú Thái": False,
-            "D-": False
+        # Cấu hình chạy ngầm
+        self.config_data = {
+            "DayShift": True
         }
 
         self.init_ui()
@@ -1179,20 +1120,8 @@ class MainWindow(QMainWindow):
             self.active_threads.remove(thread_obj)
 
     def get_current_config(self):
-        return {
-            "Block A": self.txt_cfg_a.text().strip(),
-            "Block B": self.txt_cfg_b.text().strip(),
-            "Block C": self.txt_cfg_c.text().strip(),
-            "Block E": self.txt_cfg_e.text().strip(),
-            "SDD": self.toggle_sdd.isChecked(),
-            "AHM": self.toggle_ahm.isChecked(),
-            "D-S NDD normal": self.toggle_ds_ndd_normal.isChecked(),
-            "D-S NDD Phú Thái": self.toggle_ds_ndd_phu_thai.isChecked(),
-            "N-S NDD normal": self.toggle_ns_ndd_normal.isChecked(),
-            "N-S NDD Phú Thái": self.toggle_ns_ndd_phu_thai.isChecked(),
-            "D-": self.toggle_dminus.isChecked(),
-            "DayShift": self.btn_shift_toggle.isChecked()
-        }
+        self.config_data["DayShift"] = self.btn_shift_toggle.isChecked()
+        return self.config_data
 
     def init_ui(self):
         central_widget = QWidget()
@@ -1297,7 +1226,7 @@ class MainWindow(QMainWindow):
         left_panel_container = QWidget()
         left_layout = QVBoxLayout(left_panel_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        self.create_zone_box(left_layout, "Cõi Tạm", "#64748B", 0, 0, is_grid=False, show_badge=True,
+        self.create_zone_box(left_layout, "Cõi Tạm", "#64748B", 0, 0, is_grid=False, show_badge=False,
                              is_left_panel=True, watermark_text="<3")
         workspace_layout.addWidget(left_panel_container, stretch=1)
 
@@ -1324,7 +1253,9 @@ class MainWindow(QMainWindow):
         right_layout.addLayout(tab_layout)
         self.stacked_widget = QStackedWidget()
 
-        # Normal Pick Tab
+        # =================================================================
+        # TAB 1: Normal Pick Tab
+        # =================================================================
         normal_container = QWidget()
         normal_layout_main = QVBoxLayout(normal_container)
         normal_layout_main.setContentsMargins(0, 0, 0, 0)
@@ -1332,91 +1263,61 @@ class MainWindow(QMainWindow):
         normal_grid = QGridLayout()
         normal_grid.setSpacing(int(6 * self.scale))
 
-        self.create_zone_box(normal_grid, "Block A", "#10B981", 0, 0, True, watermark_text="A")
-        self.create_zone_box(normal_grid, "Block B", "#F59E0B", 0, 1, True, watermark_text="B")
+        # --- Cụm Block A Tối Ưu (Chia 3 ô lồng nhau) ---
+        a_cluster_widget = QWidget()
+        a_cluster_layout = QVBoxLayout(a_cluster_widget)
+        a_cluster_layout.setContentsMargins(0, 0, 0, 0)
+        a_cluster_layout.setSpacing(int(4 * self.scale))
+
+        self.create_zone_box(a_cluster_layout, "Block A", "#10B981", 0, 0, is_grid=False, watermark_text="A")
+
+        sub_a_layout = QHBoxLayout()
+        sub_a_layout.setContentsMargins(0, 0, 0, 0)
+        sub_a_layout.setSpacing(int(4 * self.scale))
+        self.create_zone_box(sub_a_layout, "Block A 1-2", "#059669", 0, 0, is_grid=False, watermark_text="A1-2")
+        self.create_zone_box(sub_a_layout, "Block A 3-4", "#047857", 0, 0, is_grid=False, watermark_text="A3-4")
+        a_cluster_layout.addLayout(sub_a_layout)
+
+        a_cluster_layout.setStretch(0, 1)
+        a_cluster_layout.setStretch(1, 1)
+
+        normal_grid.addWidget(a_cluster_widget, 0, 0)
+
+        # --- Cụm Block B Tối Ưu (Chia 3 ô lồng nhau: B tổng, B2, B4) ---
+        b_cluster_widget = QWidget()
+        b_cluster_layout = QVBoxLayout(b_cluster_widget)
+        b_cluster_layout.setContentsMargins(0, 0, 0, 0)
+        b_cluster_layout.setSpacing(int(4 * self.scale))
+
+        self.create_zone_box(b_cluster_layout, "Block B", "#F59E0B", 0, 0, is_grid=False, watermark_text="B")
+
+        sub_b_layout = QHBoxLayout()
+        sub_b_layout.setContentsMargins(0, 0, 0, 0)
+        sub_b_layout.setSpacing(int(4 * self.scale))
+        self.create_zone_box(sub_b_layout, "Block B2", "#D97706", 0, 0, is_grid=False, watermark_text="B2")
+        self.create_zone_box(sub_b_layout, "Block B4", "#B45309", 0, 0, is_grid=False, watermark_text="B4")
+        b_cluster_layout.addLayout(sub_b_layout)
+
+        b_cluster_layout.setStretch(0, 1)
+        b_cluster_layout.setStretch(1, 1)
+
+        normal_grid.addWidget(b_cluster_widget, 0, 1)
+
+        # Hàng 0: Block A (Cluster), Block B (Cluster), Block C, Block E
         self.create_zone_box(normal_grid, "Block C", "#8B5CF6", 0, 2, True, watermark_text="C")
-        self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 0, 3, True, watermark_text="AB")
+        self.create_zone_box(normal_grid, "Block E", "#EC4899", 0, 3, True, watermark_text="E")
 
-        config_frame = QFrame()
-        config_frame.setStyleSheet(
-            "QFrame { border: 1px solid #E2E8F0; border-top: 4px solid #475569; border-radius: 8px; background-color: #F5F5F5; }")
-
-        config_layout = QGridLayout(config_frame)
-        config_layout.setContentsMargins(pad_main, pad_main, pad_main, pad_main)
-        config_layout.setSpacing(int(4 * self.scale))
-
-        lbl_cfg_title = QLabel("⚙️ Configuration")
-        lbl_cfg_title.setStyleSheet(
-            f"font-weight: 600; font-size: {max(11, int(13 * self.scale))}px; color: #334155; border: none;")
-        config_layout.addWidget(lbl_cfg_title, 0, 0, 1, 2)
-
-        self.txt_cfg_a = QLineEdit()
-        self.txt_cfg_b = QLineEdit()
-        self.txt_cfg_c = QLineEdit()
-        self.txt_cfg_e = QLineEdit()
-
-        font_size_cfg = max(9, int(11 * self.scale))
-
-        for idx, (lbl_text, txt_widget) in enumerate(
-                [("A:", self.txt_cfg_a), ("B:", self.txt_cfg_b), ("C:", self.txt_cfg_c), ("E:", self.txt_cfg_e)]):
-            lbl = QLabel(lbl_text)
-            lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
-            txt_widget.setReadOnly(True)
-            config_layout.addWidget(lbl, idx + 1, 0)
-            config_layout.addWidget(txt_widget, idx + 1, 1)
-
-        lbl_dynamic_title = QLabel("⚡ Dynamic Wave Config")
-        lbl_dynamic_title.setStyleSheet(
-            f"font-weight: 600; font-size: {max(10, int(12 * self.scale))}px; color: #9333EA; border: none; margin-top: 4px;")
-        config_layout.addWidget(lbl_dynamic_title, 5, 0, 1, 2)
-
-        self.toggle_sdd = ToggleSwitch()
-        self.toggle_ahm = ToggleSwitch()
-        self.toggle_ds_ndd_normal = ToggleSwitch()
-        self.toggle_ds_ndd_phu_thai = ToggleSwitch()
-        self.toggle_ns_ndd_normal = ToggleSwitch()
-        self.toggle_ns_ndd_phu_thai = ToggleSwitch()
-        self.toggle_dminus = ToggleSwitch()
-
-        self.toggle_sdd.clicked.connect(lambda checked, name="SDD": self.on_toggle_changed(name))
-        self.toggle_ahm.clicked.connect(lambda checked, name="AHM": self.on_toggle_changed(name))
-        self.toggle_ds_ndd_normal.clicked.connect(lambda checked, name="D-S NDD normal": self.on_toggle_changed(name))
-        self.toggle_ds_ndd_phu_thai.clicked.connect(
-            lambda checked, name="D-S NDD Phú Thái": self.on_toggle_changed(name))
-        self.toggle_ns_ndd_normal.clicked.connect(lambda checked, name="N-S NDD normal": self.on_toggle_changed(name))
-        self.toggle_ns_ndd_phu_thai.clicked.connect(
-            lambda checked, name="N-S NDD Phú Thái": self.on_toggle_changed(name))
-        self.toggle_dminus.clicked.connect(lambda checked, name="D-": self.on_toggle_changed(name))
-
-        for idx, (lbl_text, toggle_widget) in enumerate(
-                [("SDD:", self.toggle_sdd),
-                 ("AHM:", self.toggle_ahm),
-                 ("D-S NDD normal:", self.toggle_ds_ndd_normal),
-                 ("D-S NDD Phú Thái:", self.toggle_ds_ndd_phu_thai),
-                 ("N-S NDD normal:", self.toggle_ns_ndd_normal),
-                 ("N-S NDD Phú Thái:", self.toggle_ns_ndd_phu_thai),
-                 ("D-:", self.toggle_dminus)]):
-            lbl = QLabel(lbl_text)
-            lbl.setStyleSheet(f"font-weight: 500; color: #475569; border: none; font-size: {font_size_cfg}px;")
-            config_layout.addWidget(lbl, 6 + idx, 0)
-            config_layout.addWidget(toggle_widget, 6 + idx, 1)
-
-        self.btn_edit_config = QPushButton("Chỉnh sửa")
-        self.btn_edit_config.setStyleSheet("margin-top: 8px;")
-        self.btn_edit_config.clicked.connect(self.toggle_config_edit)
-        config_layout.addWidget(self.btn_edit_config, 12, 0, 1, 2)
-
-        normal_grid.addWidget(config_frame, 0, 4, 2, 1)
-
-        self.create_zone_box(normal_grid, "Block A&C", "#3B82F6", 1, 0, True, watermark_text="AC")
+        # Hàng 1: Block A&B, Block B&C, Block A&B&C (chiếm 2 cột cân đối)
+        self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 1, 0, True, watermark_text="AB")
         self.create_zone_box(normal_grid, "Block B&C", "#3B82F6", 1, 1, True, watermark_text="BC")
-        self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 2, True, watermark_text="ABC")
-        self.create_zone_box(normal_grid, "Block E", "#EC4899", 1, 3, True, watermark_text="E")
+        self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 2, is_grid=True, colspan=2, watermark_text="ABC")
 
         normal_layout_main.addLayout(normal_grid)
         self.stacked_widget.addWidget(normal_container)
 
-        # Flow Pick Tab
+        # =================================================================
+        # TAB 2: Flow Pick Tab
+        # =================================================================
         flow_container = QWidget()
         flow_layout_main = QVBoxLayout(flow_container)
         flow_layout_main.setContentsMargins(0, 0, 0, 0)
@@ -1463,46 +1364,13 @@ class MainWindow(QMainWindow):
             self.btn_shift_toggle.setText("☀️ Ca Ngày")
             self.btn_shift_toggle.setStyleSheet(
                 "background-color: #10B981; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
-            self.toggle_ds_ndd_normal.setChecked(True)
-            self.toggle_ds_ndd_phu_thai.setChecked(True)
-            self.toggle_ns_ndd_normal.setChecked(False)
-            self.toggle_ns_ndd_phu_thai.setChecked(False)
         else:
             self.btn_shift_toggle.setText("🌙 Ca Đêm")
             self.btn_shift_toggle.setStyleSheet(
                 "background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
-            self.toggle_ds_ndd_normal.setChecked(False)
-            self.toggle_ds_ndd_phu_thai.setChecked(False)
-            self.toggle_ns_ndd_normal.setChecked(True)
-            self.toggle_ns_ndd_phu_thai.setChecked(True)
 
-        new_states = {
-            "SDD": self.toggle_sdd.isChecked(),
-            "AHM": self.toggle_ahm.isChecked(),
-            "D-S NDD normal": self.toggle_ds_ndd_normal.isChecked(),
-            "D-S NDD Phú Thái": self.toggle_ds_ndd_phu_thai.isChecked(),
-            "N-S NDD normal": self.toggle_ns_ndd_normal.isChecked(),
-            "N-S NDD Phú Thái": self.toggle_ns_ndd_phu_thai.isChecked(),
-            "D-": self.toggle_dminus.isChecked()
-        }
-
-        rules_to_update = {}
-        for k, v in new_states.items():
-            if v != self.current_toggle_states.get(k, False):
-                status_int = 1 if v else 0
-                for rule_id in WAVE_RULE_GROUPS.get(k, []):
-                    rules_to_update[rule_id] = status_int
-
-        self.current_toggle_states = new_states.copy()
         config_data = self.get_current_config()
         self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
-
-        if rules_to_update:
-            api_thread = WMSUpdateWaveRuleThread(self.wms_cookie, rules_to_update)
-            api_thread.finished_update.connect(self.on_wave_rules_updated)
-            self.start_thread(api_thread)
-            self.lbl_status.setText(f"⚡ Tự động cấu hình {len(rules_to_update)} Wave Rules khi đổi ca...")
-            self.lbl_status.setStyleSheet("color: #9333EA;")
 
         self.refresh_wms_tasks()
 
@@ -1590,44 +1458,6 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'txt_search'):
             self.on_search_text_changed(self.txt_search.text())
 
-    def on_toggle_changed(self, changed_toggle_name):
-        new_states = {
-            "SDD": self.toggle_sdd.isChecked(),
-            "AHM": self.toggle_ahm.isChecked(),
-            "D-S NDD normal": self.toggle_ds_ndd_normal.isChecked(),
-            "D-S NDD Phú Thái": self.toggle_ds_ndd_phu_thai.isChecked(),
-            "N-S NDD normal": self.toggle_ns_ndd_normal.isChecked(),
-            "N-S NDD Phú Thái": self.toggle_ns_ndd_phu_thai.isChecked(),
-            "D-": self.toggle_dminus.isChecked()
-        }
-
-        rules_to_update = {}
-        for k, v in new_states.items():
-            if v != self.current_toggle_states.get(k, False):
-                status_int = 1 if v else 0
-                for rule_id in WAVE_RULE_GROUPS.get(k, []):
-                    rules_to_update[rule_id] = status_int
-
-        self.current_toggle_states = new_states.copy()
-        config_data = self.get_current_config()
-        self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
-
-        if rules_to_update:
-            api_thread = WMSUpdateWaveRuleThread(self.wms_cookie, rules_to_update)
-            api_thread.finished_update.connect(self.on_wave_rules_updated)
-            self.start_thread(api_thread)
-            self.lbl_status.setText(f"⚡ Đang cấu hình {len(rules_to_update)} Wave Rules song song...")
-            self.lbl_status.setStyleSheet("color: #9333EA;")
-
-    @pyqtSlot(int, int)
-    def on_wave_rules_updated(self, success_count, total_count):
-        if success_count == total_count and total_count > 0:
-            self.lbl_status.setText(f"✅ Đã cấu hình xong {success_count}/{total_count} Wave Rules!")
-            self.lbl_status.setStyleSheet("color: #10B981;")
-        elif total_count > 0:
-            self.lbl_status.setText(f"⚠️ Đã cấu hình {success_count}/{total_count} Wave Rules. Có lỗi xảy ra!")
-            self.lbl_status.setStyleSheet("color: #F59E0B;")
-
     def switch_tab(self, index):
         self.stacked_widget.setCurrentIndex(index)
         if index == 0:
@@ -1676,12 +1506,7 @@ class MainWindow(QMainWindow):
 
         if show_badge:
             font_size_badge = max(9, int(11 * self.scale))
-
-            lbl_people = QLabel("👤 0")
-            lbl_people.setStyleSheet(
-                f"background-color: #FFFFFF; color: {top_border_color}; font-weight: 600; border: 1px solid #E2E8F0; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
-            lbl_people.setAlignment(Qt.AlignCenter)
-            badges_dict = {"people": lbl_people}
+            badges_dict = {}
 
             if lw_id == "KHO_E":
                 lbl_pt = QLabel("Phú Thái\n📦 0 | ⚧️ 0")
@@ -1697,7 +1522,6 @@ class MainWindow(QMainWindow):
                 lbl_gd.setStyleSheet(
                     f"background-color: #FFFFFF; color: #10B981; font-weight: 600; border: 1px solid #6EE7B7; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
 
-                h_layout.addWidget(lbl_people)
                 h_layout.addWidget(lbl_pt)
                 h_layout.addWidget(lbl_tv)
                 h_layout.addWidget(lbl_mgtl)
@@ -1719,8 +1543,6 @@ class MainWindow(QMainWindow):
 
                 h_layout.addWidget(lbl_normal)
                 h_layout.addStretch()
-                h_layout.addWidget(lbl_people)
-                h_layout.addStretch()
                 h_layout.addWidget(lbl_urgent)
 
                 badges_dict["normal"] = lbl_normal
@@ -1736,14 +1558,11 @@ class MainWindow(QMainWindow):
                     f"background-color: #FFFFFF; color: #9333EA; font-weight: 600; border: 1px solid #D8B4FE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
                 lbl_ssaq.setAlignment(Qt.AlignCenter)
 
-                h_layout.addWidget(lbl_people)
                 h_layout.addWidget(lbl_flow)
                 h_layout.addWidget(lbl_ssaq)
                 h_layout.addStretch()
                 badges_dict["flow"] = lbl_flow
                 badges_dict["ssaq"] = lbl_ssaq
-            else:
-                h_layout.addWidget(lbl_people)
 
             self.badges[lw_id] = badges_dict
 
@@ -1781,7 +1600,6 @@ class MainWindow(QMainWindow):
 
             if z_id in self.badges:
                 b_dict = self.badges[z_id]
-                b_dict["people"].setText(f"👤 {people_count}")
 
                 if z_id == "KHO_E":
                     counts = self.kho_e_task_counts
@@ -1794,9 +1612,7 @@ class MainWindow(QMainWindow):
                     task_data = self.task_counts.get(z_id, {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0})
                     dyn_data = self.dynamic_task_counts.get(z_id, {"normal": 0, "ahm": 0, "sdd": 0, "ndd": 0, "oth": 0})
 
-                    t_norm = task_data.get("normal", 0) + dyn_data.get("normal", 0)
                     d_norm = dyn_data.get("normal", 0)
-
                     t_ahm = task_data.get("ahm", 0) + dyn_data.get("ahm", 0)
                     t_sdd = task_data.get("sdd", 0) + dyn_data.get("sdd", 0)
                     t_ndd = task_data.get("ndd", 0) + dyn_data.get("ndd", 0)
@@ -1993,7 +1809,7 @@ class MainWindow(QMainWindow):
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
             menu.addSeparator()
             act_y = menu.addAction("🔥 Gán Tất Cả Express")
-            act_a = menu.addAction("🅰️ Gán Tất Cả AHM")
+            act_a = menu.addAction("🅰️️ Gán Tất Cả AHM")
             act_s = menu.addAction("🪼 Gán SDD")
             act_v = menu.addAction("🚀 Gán NDD (50057)")
 
@@ -2157,29 +1973,11 @@ class MainWindow(QMainWindow):
             if isinstance(val, str): return val.lower() == 'true'
             return bool(val)
 
-        if config_dict is not None:
-            self.txt_cfg_a.setText(config_dict.get("Block A", ""))
-            self.txt_cfg_b.setText(config_dict.get("Block B", ""))
-            self.txt_cfg_c.setText(config_dict.get("Block C", ""))
-            self.txt_cfg_e.setText(config_dict.get("Block E", ""))
-
-            self.toggle_sdd.blockSignals(True)
-            self.toggle_ahm.blockSignals(True)
-            self.toggle_ds_ndd_normal.blockSignals(True)
-            self.toggle_ds_ndd_phu_thai.blockSignals(True)
-            self.toggle_ns_ndd_normal.blockSignals(True)
-            self.toggle_ns_ndd_phu_thai.blockSignals(True)
-            self.toggle_dminus.blockSignals(True)
-
-            is_sdd = _parse_bool(config_dict.get("SDD", False))
-            is_ahm = _parse_bool(config_dict.get("AHM", False))
-            is_ds_ndd_normal = _parse_bool(config_dict.get("D-S NDD normal", False))
-            is_ds_ndd_phu_thai = _parse_bool(config_dict.get("D-S NDD Phú Thái", False))
-            is_ns_ndd_normal = _parse_bool(config_dict.get("N-S NDD normal", False))
-            is_ns_ndd_phu_thai = _parse_bool(config_dict.get("N-S NDD Phú Thái", False))
-            is_dminus = _parse_bool(config_dict.get("D-", False))
+        if config_dict is not None and isinstance(config_dict, dict):
+            self.config_data.update(config_dict)
 
             is_day_shift = _parse_bool(config_dict.get("DayShift", True))
+            self.config_data["DayShift"] = is_day_shift
             self.btn_shift_toggle.blockSignals(True)
             self.btn_shift_toggle.setChecked(is_day_shift)
             if is_day_shift:
@@ -2191,32 +1989,6 @@ class MainWindow(QMainWindow):
                 self.btn_shift_toggle.setStyleSheet(
                     "background-color: #EF4444; color: white; border-radius: 6px; padding: 6px; font-weight: bold;")
             self.btn_shift_toggle.blockSignals(False)
-
-            self.toggle_sdd.setChecked(is_sdd)
-            self.toggle_ahm.setChecked(is_ahm)
-            self.toggle_ds_ndd_normal.setChecked(is_ds_ndd_normal)
-            self.toggle_ds_ndd_phu_thai.setChecked(is_ds_ndd_phu_thai)
-            self.toggle_ns_ndd_normal.setChecked(is_ns_ndd_normal)
-            self.toggle_ns_ndd_phu_thai.setChecked(is_ns_ndd_phu_thai)
-            self.toggle_dminus.setChecked(is_dminus)
-
-            self.current_toggle_states = {
-                "SDD": is_sdd,
-                "AHM": is_ahm,
-                "D-S NDD normal": is_ds_ndd_normal,
-                "D-S NDD Phú Thái": is_ds_ndd_phu_thai,
-                "N-S NDD normal": is_ns_ndd_normal,
-                "N-S NDD Phú Thái": is_ns_ndd_phu_thai,
-                "D-": is_dminus
-            }
-
-            self.toggle_sdd.blockSignals(False)
-            self.toggle_ahm.blockSignals(False)
-            self.toggle_ds_ndd_normal.blockSignals(False)
-            self.toggle_ds_ndd_phu_thai.blockSignals(False)
-            self.toggle_ns_ndd_normal.blockSignals(False)
-            self.toggle_ns_ndd_phu_thai.blockSignals(False)
-            self.toggle_dminus.blockSignals(False)
 
         if pickers_dict is None:
             self.lbl_status.setText("❌ Lỗi đồng bộ Firebase!")
@@ -2254,7 +2026,7 @@ class MainWindow(QMainWindow):
                 if urg == "Y":
                     prefix = "🔥 "
                 elif urg == "A":
-                    prefix = "🅰️ "
+                    prefix = "🅰️️ "
                 elif urg == "S":
                     prefix = "🪼 "
                 elif urg == "V":
@@ -2274,29 +2046,6 @@ class MainWindow(QMainWindow):
         self.lbl_status.setStyleSheet("color: #10B981;")
         self.refresh_wms_tasks()
         self.trigger_search_update()
-
-    def toggle_config_edit(self):
-        if self.btn_edit_config.text() == "Chỉnh sửa":
-            self.btn_edit_config.setText("Lưu cài đặt")
-            self.btn_edit_config.setObjectName("btn_primary")
-            self.btn_edit_config.style().unpolish(self.btn_edit_config)
-            self.btn_edit_config.style().polish(self.btn_edit_config)
-            self.txt_cfg_a.setReadOnly(False)
-            self.txt_cfg_b.setReadOnly(False)
-            self.txt_cfg_c.setReadOnly(False)
-            self.txt_cfg_e.setReadOnly(False)
-        else:
-            self.btn_edit_config.setText("Chỉnh sửa")
-            self.btn_edit_config.setObjectName("")
-            self.btn_edit_config.style().unpolish(self.btn_edit_config)
-            self.btn_edit_config.style().polish(self.btn_edit_config)
-            self.txt_cfg_a.setReadOnly(True)
-            self.txt_cfg_b.setReadOnly(True)
-            self.txt_cfg_c.setReadOnly(True)
-            self.txt_cfg_e.setReadOnly(True)
-            config_data = self.get_current_config()
-            self.start_thread(FirebaseUpdateThread("PUT_CONFIG", data=config_data))
-            self.refresh_wms_tasks()
 
 
 if __name__ == "__main__":
