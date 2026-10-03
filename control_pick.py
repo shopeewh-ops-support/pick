@@ -1294,10 +1294,10 @@ class MainWindow(QMainWindow):
 
         # Hàng 1: 6 ô (C, E, A&B, B&C, A&B&C, A&B&C&E -> Lưới 2x6 cân xứng hoàn hảo)
         self.create_zone_box(normal_grid, "Block C", "#8B5CF6", 1, 0, True, watermark_text="C")
-        self.create_zone_box(normal_grid, "Block E", "#EC4899", 1, 1, True, watermark_text="E")
-        self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 1, 2, True, watermark_text="AB")
-        self.create_zone_box(normal_grid, "Block B&C", "#3B82F6", 1, 3, True, watermark_text="BC")
-        self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 4, True, watermark_text="ABC")
+        self.create_zone_box(normal_grid, "Block A&B", "#3B82F6", 1, 1, True, watermark_text="AB")
+        self.create_zone_box(normal_grid, "Block B&C", "#3B82F6", 1, 2, True, watermark_text="BC")
+        self.create_zone_box(normal_grid, "Block A&B&C", "#EF4444", 1, 3, True, watermark_text="ABC")
+        self.create_zone_box(normal_grid, "Block E", "#EC4899", 1, 4, True, watermark_text="E")
         self.create_zone_box(normal_grid, "Block A&B&C&E", "#9333EA", 1, 5, True, watermark_text="ABCE")
 
         # Thiết lập độ giãn đều cho 2 hàng và 6 cột
