@@ -327,8 +327,8 @@ class WMSUpdateRuleThread(QThread):
             "Block A&B": [1031, 1791, 2610, 2633, 2937, 2986],
             "Block B&C": [1033, 1793, 2612, 2635, 2939, 2988],
             "Block A&B&C": [1032, 1794, 1792, 2611, 2613, 2634, 2636, 2738, 2940, 2938, 2987, 2989],
-            "Block A&B&C&E": [3261],
-            "Block ABCE": [3261]
+            "Block A&B&C&E": [3261,3290,3291,3292,3344,3289],
+            "Block ABCE": [3261,3290,3291,3292,3344,3289]
         }
         dynamic_wave_ids = dynamic_wave_map.get(self.target_zone, [-1])
 
