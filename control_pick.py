@@ -372,7 +372,7 @@ class WMSUpdateRuleThread(QThread):
             flow_normal_staff = [p["user_id"] for p in self.picker_list if p.get("urgent") != "Q"]
             do_post(flow_normal_staff, ["SA4"], [self.target_zone], normal_channels, ["VNVLFPOG0134"], "Flow Normal")
             do_post(flow_ssaq_staff, ["SA4"], [self.target_zone], ["50011", "50021", "50032"], ["VNVLFPOG0189"],
-                    "Flow SSAQ")
+                    "Flow IntraNDD")
         else:
             target_z_list = list(normal_zones) if normal_zones else ["SA4"]
             do_post(normal_staff, target_z_list, ["SA4"], normal_channels, ["VNVLFPOG0053"], "Normal Staff")
@@ -1038,7 +1038,7 @@ class ZoneListWidget(QListWidget):
         if self.zone_id == "KHO_E":
             menu = QMenu(self)
             a1 = menu.addAction("📦 Phú Thái - Normal")
-            a2 = menu.addAction("⚧️ Phú Thái - SSAQ")
+            a2 = menu.addAction("🚀 Phú Thái - NDD")
             a3 = menu.addAction("📦 Tivi")
             a4 = menu.addAction("📦 MGTL")
             a5 = menu.addAction("📦 Gia Dụng")
@@ -1088,7 +1088,7 @@ class ZoneListWidget(QListWidget):
                         elif urg == "V":
                             prefix = "🚀 "
                         elif urg == "Q":
-                            prefix = "⚧️ "
+                            prefix = "🚀 "
 
                     taken_item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
                     taken_item.setForeground(QColor(data.get("color", "#1E293B")))
@@ -1414,7 +1414,7 @@ class MainWindow(QMainWindow):
                     elif urg == "V":
                         prefix = "🚀 "
                     elif urg == "Q":
-                        prefix = "⚧️ "
+                        prefix = "🚀 "
 
                 base_text = f'{prefix}{name_raw} - {wms_id}'
 
@@ -1503,7 +1503,7 @@ class MainWindow(QMainWindow):
             badges_dict = {}
 
             if lw_id == "KHO_E":
-                lbl_pt = QLabel("Phú Thái\n📦 0 | ⚧️ 0")
+                lbl_pt = QLabel("Phú Thái\n📦 0 | 🚀 0")
                 lbl_pt.setStyleSheet(
                     f"background-color: #FFFFFF; color: #06B6D4; font-weight: 600; border: 1px solid #A5F3FC; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
                 lbl_tv = QLabel("Tivi\n📦 0")
@@ -1547,7 +1547,7 @@ class MainWindow(QMainWindow):
                     f"background-color: #FFFFFF; color: #06B6D4; font-weight: 600; border: 1px solid #A5F3FC; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
                 lbl_flow.setAlignment(Qt.AlignCenter)
 
-                lbl_ssaq = QLabel("⚧️ 0")
+                lbl_ssaq = QLabel("🚀 0")
                 lbl_ssaq.setStyleSheet(
                     f"background-color: #FFFFFF; color: #9333EA; font-weight: 600; border: 1px solid #D8B4FE; border-radius: 4px; padding: 4px 6px; font-size: {font_size_badge}px;")
                 lbl_ssaq.setAlignment(Qt.AlignCenter)
@@ -1598,7 +1598,7 @@ class MainWindow(QMainWindow):
                 if z_id == "KHO_E":
                     counts = self.kho_e_task_counts
                     if "pt" in b_dict: b_dict["pt"].setText(
-                        f"Phú Thái\n📦 {counts.get('PT_N', 0)} | ⚧️ {counts.get('PT_Q', 0)}")
+                        f"Phú Thái\n📦 {counts.get('PT_N', 0)} | 🚀 {counts.get('PT_Q', 0)}")
                     if "tv" in b_dict: b_dict["tv"].setText(f"Tivi\n📦 {counts.get('TV', 0)}")
                     if "mgtl" in b_dict: b_dict["mgtl"].setText(f"MGTL\n📦 {counts.get('MGTL', 0)}")
                     if "gd" in b_dict: b_dict["gd"].setText(f"Gia Dụng\n📦 {counts.get('GD', 0)}")
@@ -1619,7 +1619,7 @@ class MainWindow(QMainWindow):
                     f_qty = self.flow_task_counts.get(z_id, 0)
                     q_qty = self.flow_ssaq_counts.get(z_id, 0)
                     if "flow" in b_dict: b_dict["flow"].setText(f"📦 {f_qty}")
-                    if "ssaq" in b_dict: b_dict["ssaq"].setText(f"⚧️ {q_qty}")
+                    if "ssaq" in b_dict: b_dict["ssaq"].setText(f"🚀 {q_qty}")
 
         if hasattr(self, 'btn_tab_normal'):
             self.btn_tab_normal.setText(f"🎯 PICK NORMAL (👤 Tổng: {total_normal})")
@@ -1697,7 +1697,7 @@ class MainWindow(QMainWindow):
             elif urg == "V":
                 prefix = "🚀 "
             elif urg == "Q":
-                prefix = "⚧️ "
+                prefix = "🚀 "
 
         item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
         item.setForeground(QColor(data.get("color", "#1E293B")))
@@ -1766,7 +1766,7 @@ class MainWindow(QMainWindow):
             elif urg == "V":
                 prefix = "🚀 "
             elif urg == "Q":
-                prefix = "⚧️ "
+                prefix = "🚀 "
         item.setText(f'{prefix}{data.get("name", "N/A")} - {data.get("wms_id", "")}')
         item.setData(Qt.UserRole, data)
 
@@ -1790,14 +1790,14 @@ class MainWindow(QMainWindow):
             pass
         elif data.get("block") == "KHO_E":
             actions_kho_e["PT_N"] = menu.addAction("📦 Gán Phú Thái Normal")
-            actions_kho_e["PT_Q"] = menu.addAction("⚧️ Gán Phú Thái SSAQ")
+            actions_kho_e["PT_Q"] = menu.addAction("🚀 Gán IntraNDD")
             actions_kho_e["TV"] = menu.addAction("📦 Gán Tivi")
             actions_kho_e["MGTL"] = menu.addAction("📦 Gán MGTL")
             actions_kho_e["GD"] = menu.addAction("📦 Gán Gia Dụng")
             menu.addSeparator()
         elif data.get("block") in FLOW_ZONES:
             act_n = menu.addAction("📦 Gán Flow Thường")
-            act_q = menu.addAction("⚧️ Gán Flow SSAQ")
+            act_q = menu.addAction("🚀 Gán Flow IntraNDD")
             menu.addSeparator()
         elif data.get("block") not in FLOW_ZONES:
             act_n = menu.addAction("👤 Gán Đơn Bình Thường")
@@ -1883,7 +1883,7 @@ class MainWindow(QMainWindow):
 
         elif act_q and action == act_q:
             data["urgent"] = "Q"
-            item.setText(f'⚧️ {data.get("name", "N/A")} - {data.get("wms_id", "")}')
+            item.setText(f'🚀 {data.get("name", "N/A")} - {data.get("wms_id", "")}')
             item.setData(Qt.UserRole, data)
             self.start_thread(FirebaseUpdateThread("PUT", data=data))
             wms_thread = WMSUpdateRuleThread(data.get("block"), [data], self.get_current_config(), self.wms_cookie)
@@ -2026,7 +2026,7 @@ class MainWindow(QMainWindow):
                 elif urg == "V":
                     prefix = "🚀 "
                 elif urg == "Q":
-                    prefix = "⚧️ "
+                    prefix = "🚀 "
 
             item.setText(f'{prefix}{v.get("name", "N/A")} - {v.get("wms_id", "")}')
             item.setForeground(QColor(v.get("color", "#1E293B")))
