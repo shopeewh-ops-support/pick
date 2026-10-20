@@ -28,7 +28,7 @@ ZONE_CFG_B = {"B1", "B2", "B3", "B4", "B5", "HV", "FD"}
 ZONE_CFG_B2 = {"B2"}
 ZONE_CFG_B4 = {"B4"}
 
-ZONE_CFG_C = {"C1", "C2", "C3", "C4"}
+ZONE_CFG_C = {"C1", "C2", "C3", "C4",}
 ZONE_CFG_E = {"E1", "E2", "E3", "E4", "TOP", "REP", "FDS"}
 
 NORMAL_BLOCKS = [
